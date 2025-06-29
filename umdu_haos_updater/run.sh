@@ -35,6 +35,12 @@ echo "[INFO] Резервное копирование перед обновле
 echo "[INFO] Уведомления: ${NOTIFICATIONS}"
 echo "[INFO] MQTT Discovery: ${MQTT_DISCOVERY}"
 
+# Проверяем наличие mosquitto_pub, иначе отключаем discovery
+if [[ "$MQTT_DISCOVERY" == "true" && ! $(command -v mosquitto_pub) ]]; then
+   echo "[WARNING] mosquitto_pub не найден в контейнере — MQTT discovery будет отключён"
+   MQTT_DISCOVERY="false"
+fi
+
 # Global constants
 SHARE_DIR="/share/umdu-haos-updater"
 
