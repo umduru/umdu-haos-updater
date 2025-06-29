@@ -343,11 +343,19 @@ if [[ "$MQTT_DISCOVERY" == "true" ]]; then
     fi
 fi
 
+# --- Fallback to env vars provided by HA for mqtt (homeassistant integration) ---
+if [[ "$MQTT_DISCOVERY" == "true" ]]; then
+  if [[ -z "$MQTT_USER" && -n "${HASSIO_MQTT_USERNAME:-}" ]]; then MQTT_USER="$HASSIO_MQTT_USERNAME"; fi
+  if [[ -z "$MQTT_PASSWORD" && -n "${HASSIO_MQTT_PASSWORD:-}" ]]; then MQTT_PASSWORD="$HASSIO_MQTT_PASSWORD"; fi
+  if [[ -z "$MQTT_USER" && -n "${HASS_MQTT_USERNAME:-}" ]]; then MQTT_USER="$HASS_MQTT_USERNAME"; fi
+  if [[ -z "$MQTT_PASSWORD" && -n "${HASS_MQTT_PASSWORD:-}" ]]; then MQTT_PASSWORD="$HASS_MQTT_PASSWORD"; fi
+fi
+
 # Основной цикл работы
 while true; do
     check_for_updates
     
     echo "[INFO] Ожидание ${UPDATE_INTERVAL} секунд до следующей проверки..."
-    echo ""  # пустая строка для читаемости
+    echo "-----------------------------"
     sleep "${UPDATE_INTERVAL}"
 done 
