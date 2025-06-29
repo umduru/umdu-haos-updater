@@ -64,6 +64,19 @@ EOF
     fi
 }
 
+# Функция сравнения версий: возвращает 0, если $1 > $2
+version_gt() {
+    # Используем sort -V для корректной сортировки семантических номеров
+    local v1="$1"
+    local v2="$2"
+
+    if [[ "$(printf '%s\n' "${v1}" "${v2}" | sort -V | head -n1)" != "${v1}" ]]; then
+        # v1 выше v2
+        return 0
+    fi
+    return 1
+}
+
 # Функция проверки обновлений
 check_for_updates() {
     echo "[INFO] Проверка доступных обновлений HAOS для UMDU K1..."
@@ -83,10 +96,10 @@ check_for_updates() {
     
     echo "[INFO] Доступная версия HAOS: ${available_version}"
     
-    # Сравнение версий
+    # Сравнение версий (обновление только на более новую)
     if [[ "${current_version}" == "${available_version}" ]]; then
         echo "[INFO] Система использует актуальную версию"
-    else
+    elif version_gt "${available_version}" "${current_version}"; then
         echo "[INFO] Доступно обновление: ${current_version} -> ${available_version}"
         
         # Отправка уведомления
@@ -115,6 +128,8 @@ check_for_updates() {
                 "UMDU HAOS Обновление доступно" \
                 "Доступна версия: ${available_version}. Для автоматической установки включите auto_update в настройках add-on."
         fi
+    else
+        echo "[INFO] Доступная версия (${available_version}) не выше текущей (${current_version}). Обновление не требуется."
     fi
     
     echo "[INFO] Проверка завершена"
