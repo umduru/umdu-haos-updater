@@ -292,8 +292,8 @@ install_update_file() {
         return 1
     fi
     
-    # Путь, который увидит RAUC-daemon на хосте
-    local host_update_file="/data/share${update_file#/share}"
+    # RAUC-daemon на хосте видит тот же /share, поэтому передаём исходный путь
+    local host_update_file="${update_file}"
     
     echo "[INFO] Начинаем установку обновления..."
     echo "[INFO] Файл: ${host_update_file}"
