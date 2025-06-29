@@ -346,14 +346,7 @@ fi
 if [[ "$MQTT_DISCOVERY" == "true" ]]; then
     sup_resp=$(curl -s -H "Authorization: Bearer $SUPERVISOR_TOKEN" http://supervisor/services/mqtt 2>/dev/null) || true
 
-    # Проверяем, что получили корректный JSON
-    if echo "$sup_resp" | jq -e . >/dev/null 2>&1; then
-        sup_result=$(echo "$sup_resp" | jq -r '.result // empty')
-    else
-        log_debug "/services/mqtt вернул не-JSON: $sup_resp"
-        sup_result=""
-    fi
-
+    sup_result=$(echo "$sup_resp" | jq -r '.result // empty' 2>/dev/null || true)
     if [[ "$sup_result" == "ok" ]]; then
         sup_host=$(echo "$sup_resp" | jq -r '.data.host // empty')
         sup_port=$(echo "$sup_resp" | jq -r '.data.port // empty')
@@ -388,6 +381,10 @@ if [[ "$MQTT_DISCOVERY" == "true" ]]; then
         else
             echo "[INFO] Supervisor не вернул данные mqtt, но параметры уже заданы (host: $MQTT_HOST)"
         fi
+    fi
+
+    if [[ -z "$sup_result" ]]; then
+        log_debug "/services/mqtt: $sup_resp"
     fi
 fi
 
