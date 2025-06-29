@@ -344,23 +344,28 @@ fi
 
 # --- Автоподстановка MQTT параметров из Supervisor ---
 if [[ "$MQTT_DISCOVERY" == "true" ]]; then
+    # Обращаемся к Supervisor API v2 (/services/mqtt)
     sup_resp=$(curl -s -H "Authorization: Bearer $SUPERVISOR_TOKEN" http://supervisor/services/mqtt 2>/dev/null) || true
 
-    sup_result=$(echo "$sup_resp" | jq -r '.result // empty' 2>/dev/null || true)
-    if [[ "$sup_result" == "ok" ]]; then
-        sup_host=$(echo "$sup_resp" | jq -r '.data.host // empty')
-        sup_port=$(echo "$sup_resp" | jq -r '.data.port // empty')
-        sup_user=$(echo "$sup_resp" | jq -r '.data.username // empty')
-        sup_pass=$(echo "$sup_resp" | jq -r '.data.password // empty')
+    # Всегда логируем ответ в режиме DEBUG, чтобы упростить диагностику
+    log_debug "/services/mqtt: $sup_resp"
 
+    # Пытаемся вынуть данные, не полагаясь на поле result, так как у некоторых версий Supervisоr оно может отсутствовать
+    sup_host=$(echo "$sup_resp" | jq -r '.data.host // empty' 2>/dev/null || echo "")
+    sup_port=$(echo "$sup_resp" | jq -r '.data.port // empty' 2>/dev/null || echo "")
+    sup_user=$(echo "$sup_resp" | jq -r  '.data.username // empty' 2>/dev/null || echo "")
+    sup_pass=$(echo "$sup_resp" | jq -r  '.data.password // empty' 2>/dev/null || echo "")
+
+    if [[ -n "$sup_host" ]]; then
         # Подставляем, только если переменная ещё не заполнена
         [[ -z "$MQTT_HOST" ]] && MQTT_HOST="$sup_host"
-        [[ -z "$MQTT_PORT" ]] && MQTT_PORT="$sup_port"
-        [[ -z "$MQTT_USER" ]] && MQTT_USER="$sup_user"
-        [[ -z "$MQTT_PASSWORD" ]] && MQTT_PASSWORD="$sup_pass"
+        [[ -z "$MQTT_PORT" && -n "$sup_port" ]] && MQTT_PORT="$sup_port"
+        [[ -z "$MQTT_PORT" && -z "$sup_port" ]] && MQTT_PORT="1883"
+        [[ -z "$MQTT_USER" && -n "$sup_user" ]] && MQTT_USER="$sup_user"
+        [[ -z "$MQTT_PASSWORD" && -n "$sup_pass" ]] && MQTT_PASSWORD="$sup_pass"
         echo "[INFO] MQTT параметры Supervisor: $MQTT_HOST:$MQTT_PORT (user: $MQTT_USER)"
     elif [[ -z "$MQTT_HOST" ]]; then
-        # Попытка старого формата через общий список
+        # Fallback к устаревшему API (общий список сервисов)
         old_json=$(curl -s -H "Authorization: Bearer $SUPERVISOR_TOKEN" http://supervisor/services 2>/dev/null | jq -c '.. | objects | select(.service? == "mqtt")' | head -n1 ) || true
         if [[ -n "$old_json" ]]; then
             sup_host=$(echo "$old_json" | jq -r '.host // empty')
@@ -368,23 +373,16 @@ if [[ "$MQTT_DISCOVERY" == "true" ]]; then
             sup_user=$(echo "$old_json" | jq -r '.username // empty')
             sup_pass=$(echo "$old_json" | jq -r '.password // empty')
 
-            [[ -z "$MQTT_HOST" ]] && MQTT_HOST="$sup_host"
-            [[ -z "$MQTT_PORT" ]] && MQTT_PORT="$sup_port"
-            [[ -z "$MQTT_USER" ]] && MQTT_USER="$sup_user"
-            [[ -z "$MQTT_PASSWORD" ]] && MQTT_PASSWORD="$sup_pass"
+            [[ -z "$MQTT_HOST" && -n "$sup_host" ]] && MQTT_HOST="$sup_host"
+            [[ -z "$MQTT_PORT" && -n "$sup_port" ]] && MQTT_PORT="$sup_port"
+            [[ -z "$MQTT_PORT" && -z "$sup_port" ]] && MQTT_PORT="1883"
+            [[ -z "$MQTT_USER" && -n "$sup_user" ]] && MQTT_USER="$sup_user"
+            [[ -z "$MQTT_PASSWORD" && -n "$sup_pass" ]] && MQTT_PASSWORD="$sup_pass"
             echo "[INFO] MQTT параметры Supervisor (v1 API): $MQTT_HOST:$MQTT_PORT (user: $MQTT_USER)"
-        fi
-    else
-        if [[ -z "$MQTT_HOST" ]]; then
-            echo "[WARNING] Supervisor не вернул данные mqtt; discovery отключён"
-            MQTT_DISCOVERY="false"
         else
-            echo "[INFO] Supervisor не вернул данные mqtt, но параметры уже заданы (host: $MQTT_HOST)"
+            echo "[WARNING] Supervisor не вернул данные mqtt; discovery будет отключён"
+            MQTT_DISCOVERY="false"
         fi
-    fi
-
-    if [[ -z "$sup_result" ]]; then
-        log_debug "/services/mqtt: $sup_resp"
     fi
 fi
 
