@@ -1,5 +1,19 @@
 #!/bin/bash
 
+# Строгий режим (выходим при обращении к несуществующей переменной, ошибки пайпов ловим)
+set -u
+set -o pipefail
+
+# Включаем алиасы внутри скрипта и добавляем метку времени ко всем echo
+shopt -s expand_aliases
+alias echo='builtin echo "$(date "+%Y-%m-%d %H:%M:%S")"'
+
+# Проверяем наличие токена Supervisor
+if [[ -z "${SUPERVISOR_TOKEN:-}" ]]; then
+    echo "[ERROR] SUPERVISOR_TOKEN не установлен. Add-on не может общаться с Supervisor API."
+    exit 1
+fi
+
 # Логирование начала работы
 echo "[INFO] Запуск UMDU HAOS Updater для K1..."
 
@@ -152,7 +166,10 @@ download_update_file() {
     
     echo "[INFO] Загрузка обновления с ${update_url}..." >&2
     
-    if curl -L -o "${download_path}" "${update_url}"; then
+    # --fail      : прервать по HTTP-ошибке
+    # --retry 3   : три попытки
+    # --retry-delay 5 : пауза 5 сек
+    if curl -# -L --fail --retry 3 --retry-delay 5 -o "${download_path}" "${update_url}"; then
         echo "[INFO] Файл обновления загружен: ${download_path}" >&2
         echo "${download_path}"
         return 0
@@ -189,6 +206,8 @@ install_update_file() {
             rauc status 2>/dev/null || echo "[WARNING] Не удалось получить статус слотов"
             
             echo "[SUCCESS] Обновление успешно установлено!"
+            # Удаляем установочный файл, чтобы не занимал место
+            rm -f "${update_file}" || true
             install_success=true
         else
             rauc_exit_code=$?
