@@ -1,6 +1,6 @@
 name: "UMDU Home Assistant OS Updater"
 description: "Add-on для обновления форка HAOS для UMDU K1"
-version: "0.3.9"
+version: "0.4.0"
 slug: "umdu_haos_updater"
 init: false
 arch:
@@ -33,4 +33,6 @@ schema:
   mqtt_password: str?
 map:
   - type: share
-    read_only: false 
+    read_only: false
+services:
+  - "mqtt:need" 
