@@ -15,6 +15,9 @@ echo "[INFO] Автоматическое обновление: ${AUTO_UPDATE}"
 echo "[INFO] Резервное копирование перед обновлением: ${BACKUP_BEFORE_UPDATE}"
 echo "[INFO] Уведомления: ${NOTIFICATIONS}"
 
+# Global constants
+SHARE_DIR="/mnt/data/supervisor/share/umdu-haos-updater"
+
 # Функция проверки доступности supervisor API
 check_supervisor_access() {
     if curl -s -H "Authorization: Bearer $SUPERVISOR_TOKEN" \
@@ -121,7 +124,9 @@ check_for_updates() {
 download_update_file() {
     local available_version="$1"
     local update_url="https://github.com/umduru/umdu-haos-updater/releases/download/rauc/haos_umdu-k1-${available_version}.raucb"
-    local download_path="/tmp/haos_umdu-k1-${available_version}.raucb"
+    # Ensure shared directory exists
+    mkdir -p "${SHARE_DIR}"
+    local download_path="${SHARE_DIR}/haos_umdu-k1-${available_version}.raucb"
     
     # Проверка существования файла
     if [[ -f "${download_path}" ]]; then

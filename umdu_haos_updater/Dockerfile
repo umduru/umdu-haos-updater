@@ -2,13 +2,15 @@ ARG BUILD_FROM
 FROM $BUILD_FROM
 
 # Установка необходимых пакетов для работы с системой и обновлениями
-RUN \
+RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories && \
   apk add --no-cache \
     bash \
     curl \
     wget \
     jq \
-    ca-certificates
+    ca-certificates \
+    dbus \
+    rauc
 
 # Создание рабочей директории
 WORKDIR /app

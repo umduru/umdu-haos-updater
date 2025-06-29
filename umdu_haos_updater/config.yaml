@@ -24,4 +24,8 @@ schema:
   auto_update: bool
   backup_before_update: bool
   notifications: bool
-host_network: true 
+host_network: true
+map:
+  - type: share
+    read_only: false
+    path: /mnt/data/supervisor/share 
