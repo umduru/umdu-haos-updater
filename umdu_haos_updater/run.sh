@@ -48,7 +48,7 @@ check_supervisor_access() {
 get_current_haos_version() {
     local version=$(curl -s -H "Authorization: Bearer $SUPERVISOR_TOKEN" \
                    "http://supervisor/os/info" | jq -r '.data.version')
-    echo "$version"
+    command echo "$version"
 }
 
 # Функция отправки уведомления в Home Assistant
@@ -160,7 +160,7 @@ download_update_file() {
     # Проверка существования файла
     if [[ -f "${download_path}" ]]; then
         echo "[INFO] Файл обновления уже существует: ${download_path}" >&2
-        echo "${download_path}"
+        command echo "${download_path}"
         return 0
     fi
     
@@ -171,7 +171,7 @@ download_update_file() {
     # --retry-delay 5 : пауза 5 сек
     if curl -# -L --fail --retry 3 --retry-delay 5 -o "${download_path}" "${update_url}"; then
         echo "[INFO] Файл обновления загружен: ${download_path}" >&2
-        echo "${download_path}"
+        command echo "${download_path}"
         return 0
     else
         echo "[ERROR] Не удалось загрузить файл обновления" >&2
