@@ -98,15 +98,30 @@ publish_state() {
 
 handle_mqtt_commands() {
     if [[ "$MQTT_DISCOVERY" != "true" ]]; then return; fi
-    mosquitto_sub -h "$MQTT_HOST" -p "$MQTT_PORT" ${MQTT_USER:+-u "$MQTT_USER"} ${MQTT_PASSWORD:+-P "$MQTT_PASSWORD"} -t "umdu/haos_updater/cmd" |
-    while read cmd; do
+    echo "[INFO] Ожидание MQTT-команд на topic umdu/haos_updater/cmd…"
+    mosquitto_sub -h "$MQTT_HOST" -p "$MQTT_PORT" \
+        ${MQTT_USER:+-u "$MQTT_USER"} ${MQTT_PASSWORD:+-P "$MQTT_PASSWORD"} \
+        -t "umdu/haos_updater/cmd" 2>/tmp/mqtt_sub_err.log |
+    while read -r cmd; do
+        log_debug "MQTT cmd recv: $cmd"
         if [[ "$cmd" == "install" && -n "$LAST_AVAILABLE_VERSION" ]]; then
-            echo "[INFO] Получена команда install через MQTT"
+            echo "[INFO] Получена команда install через MQTT; начинаем обновление..."
             if update_file_path=$(download_update_file "$LAST_AVAILABLE_VERSION"); then
                 install_update_file "$update_file_path"
+            else
+                echo "[ERROR] Не удалось загрузить файл обновления после команды install"
             fi
+        else
+            echo "[WARNING] Неизвестная команда через MQTT: $cmd"
         fi
     done &
+
+    # Проверим, запустился ли mosquitto_sub (файл ошибки не пуст – проблема подключения)
+    sleep 2
+    if [[ -s /tmp/mqtt_sub_err.log ]]; then
+        echo "[ERROR] Ошибка подключения для mosquitto_sub:"; cat /tmp/mqtt_sub_err.log
+        MQTT_DISCOVERY="false"
+    fi
 }
 
 # Функция проверки доступности supervisor API
