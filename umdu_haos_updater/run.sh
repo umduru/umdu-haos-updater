@@ -336,13 +336,12 @@ fi
 
 # --- Автоподстановка MQTT параметров из Supervisor ---
 if [[ "$MQTT_DISCOVERY" == "true" ]]; then
-    svc_json=$(curl -s -H "Authorization: Bearer $SUPERVISOR_TOKEN" http://supervisor/services 2>/dev/null | \
-        jq -c '.. | objects | select(.service? == "mqtt")' | head -n1 ) || true
-    if [[ -n "$svc_json" ]]; then
-        sup_host=$(echo "$svc_json" | jq -r '.host')
-        sup_port=$(echo "$svc_json" | jq -r '.port')
-        sup_user=$(echo "$svc_json" | jq -r '.username // empty')
-        sup_pass=$(echo "$svc_json" | jq -r '.password // empty')
+    sup_resp=$(curl -s -H "Authorization: Bearer $SUPERVISOR_TOKEN" http://supervisor/services/mqtt 2>/dev/null) || true
+    if [[ -n "$sup_resp" && $(echo "$sup_resp" | jq -r '.result') == "ok" ]]; then
+        sup_host=$(echo "$sup_resp" | jq -r '.data.host // empty')
+        sup_port=$(echo "$sup_resp" | jq -r '.data.port // empty')
+        sup_user=$(echo "$sup_resp" | jq -r '.data.username // empty')
+        sup_pass=$(echo "$sup_resp" | jq -r '.data.password // empty')
 
         # Подставляем, только если переменная ещё не заполнена
         [[ -z "$MQTT_HOST" ]] && MQTT_HOST="$sup_host"
