@@ -335,7 +335,7 @@ fi
 # --- Автоподстановка MQTT параметров из Supervisor ---
 if [[ "$MQTT_DISCOVERY" == "true" ]]; then
     svc_json=$(curl -s -H "Authorization: Bearer $SUPERVISOR_TOKEN" http://supervisor/services 2>/dev/null | \
-        jq -e '(.data? // .services?) as $root | ($root[]?) | select(.service=="mqtt")' ) || true
+        jq -c '.. | objects | select(.service? == "mqtt")' | head -n1 ) || true
     if [[ -n "$svc_json" ]]; then
         sup_host=$(echo "$svc_json" | jq -r '.host')
         sup_port=$(echo "$svc_json" | jq -r '.port')
