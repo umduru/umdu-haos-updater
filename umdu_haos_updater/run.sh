@@ -326,10 +326,12 @@ install_update_file() {
     fi
 }
 
-# Проверка доступа к supervisor при запуске
-if ! check_supervisor_access; then
-    echo "[ERROR] Невозможно получить доступ к Supervisor. Проверьте настройки add-on'а"
-    exit 1
+# --- Fallback: переменные окружения Home Assistant ---
+if [[ "$MQTT_DISCOVERY" == "true" ]]; then
+    [[ -z "$MQTT_HOST" && -n "${HASSIO_MQTT_HOST:-${HASSIO_MQTT_ADDRESS:-}}" ]] && MQTT_HOST="${HASSIO_MQTT_HOST:-$HASSIO_MQTT_ADDRESS}"
+    [[ -z "$MQTT_PORT" && -n "${HASSIO_MQTT_PORT:-}" ]] && MQTT_PORT="$HASSIO_MQTT_PORT"
+    [[ -z "$MQTT_USER" && -n "${HASSIO_MQTT_USERNAME:-${HASS_MQTT_USERNAME:-}}" ]] && MQTT_USER="${HASSIO_MQTT_USERNAME:-$HASS_MQTT_USERNAME}"
+    [[ -z "$MQTT_PASSWORD" && -n "${HASSIO_MQTT_PASSWORD:-${HASS_MQTT_PASSWORD:-}}" ]] && MQTT_PASSWORD="${HASSIO_MQTT_PASSWORD:-$HASS_MQTT_PASSWORD}"
 fi
 
 # --- Автоподстановка MQTT параметров из Supervisor ---
@@ -352,14 +354,6 @@ if [[ "$MQTT_DISCOVERY" == "true" ]]; then
         echo "[WARNING] Supervisor не вернул данные mqtt; discovery выключен"
         MQTT_DISCOVERY="false"
     fi
-fi
-
-# --- Fallback: переменные окружения Home Assistant ---
-if [[ "$MQTT_DISCOVERY" == "true" ]]; then
-    [[ -z "$MQTT_HOST" && -n "${HASSIO_MQTT_HOST:-${HASSIO_MQTT_ADDRESS:-}}" ]] && MQTT_HOST="${HASSIO_MQTT_HOST:-$HASSIO_MQTT_ADDRESS}"
-    [[ -z "$MQTT_PORT" && -n "${HASSIO_MQTT_PORT:-}" ]] && MQTT_PORT="$HASSIO_MQTT_PORT"
-    [[ -z "$MQTT_USER" && -n "${HASSIO_MQTT_USERNAME:-${HASS_MQTT_USERNAME:-}}" ]] && MQTT_USER="${HASSIO_MQTT_USERNAME:-$HASS_MQTT_USERNAME}"
-    [[ -z "$MQTT_PASSWORD" && -n "${HASSIO_MQTT_PASSWORD:-${HASS_MQTT_PASSWORD:-}}" ]] && MQTT_PASSWORD="${HASSIO_MQTT_PASSWORD:-$HASS_MQTT_PASSWORD}"
 fi
 
 # --- Финальный резервы по MQTT ---
