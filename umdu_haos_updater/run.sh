@@ -101,10 +101,6 @@ handle_mqtt_commands() {
     done &
 }
 
-# Инициализируем discovery и слушаем команды
-publish_discovery
-handle_mqtt_commands
-
 # Функция проверки доступности supervisor API
 check_supervisor_access() {
     if curl -s -H "Authorization: Bearer $SUPERVISOR_TOKEN" \
@@ -373,6 +369,10 @@ if [[ "$MQTT_DISCOVERY" == "true" ]]; then
         MQTT_DISCOVERY="false"
     fi
 fi
+
+# Инициализируем discovery и слушаем команды (после всех фоллбэков)
+publish_discovery
+handle_mqtt_commands
 
 # Основной цикл работы
 while true; do
