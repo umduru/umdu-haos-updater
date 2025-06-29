@@ -91,8 +91,22 @@ check_for_updates() {
             "Доступна новая версия Home Assistant OS для UMDU K1: ${available_version}. Текущая версия: ${current_version}."
         
         # Загрузка файла обновления
-        if download_update_file "${available_version}"; then
-            bashio::log.info "Файл обновления готов к установке"
+        if update_file_path=$(download_update_file "${available_version}"); then
+            
+            # Проверка режима обновления
+            if [[ "${AUTO_UPDATE}" == "true" ]]; then
+                bashio::log.info "Автоматическое обновление включено, начинаем установку..."
+                install_update_file "${update_file_path}"
+            else
+                bashio::log.info "Файл обновления загружен и готов к ручной установке"
+                bashio::log.info "Местоположение файла: ${update_file_path}"
+                bashio::log.info "Для автоматической установки включите 'auto_update: true' в настройках add-on"
+                
+                # Отправка уведомления о готовности к ручной установке
+                send_notification \
+                    "UMDU HAOS Файл обновления готов" \
+                    "Файл обновления загружен: ${available_version}. Для автоматической установки включите auto_update в настройках add-on."
+            fi
         else
             bashio::log.error "Ошибка загрузки файла обновления"
         fi
@@ -105,7 +119,14 @@ check_for_updates() {
 download_update_file() {
     local available_version="$1"
     local update_url="https://github.com/umduru/umdu-haos-updater/releases/download/rauc/haos_umdu-k1-${available_version}.raucb"
-    local download_path="/tmp/haos_update.raucb"
+    local download_path="/tmp/haos_umdu-k1-${available_version}.raucb"
+    
+    # Проверка существования файла
+    if [[ -f "${download_path}" ]]; then
+        bashio::log.info "Файл обновления уже существует: ${download_path}"
+        echo "${download_path}"
+        return 0
+    fi
     
     bashio::log.info "Загрузка обновления с ${update_url}..."
     
@@ -115,6 +136,45 @@ download_update_file() {
         return 0
     else
         bashio::log.error "Не удалось загрузить файл обновления"
+        return 1
+    fi
+}
+
+# Функция установки обновления через RAUC CLI
+install_update_file() {
+    local update_file="$1"
+    
+    if [[ ! -f "${update_file}" ]]; then
+        bashio::log.error "Файл обновления не найден: ${update_file}"
+        return 1
+    fi
+    
+    bashio::log.info "Начинаем установку обновления через RAUC CLI..."
+    bashio::log.info "Файл: ${update_file}"
+    
+    # Запуск установки
+    if rauc install "${update_file}"; then
+        bashio::log.info "Обновление успешно установлено!"
+        bashio::log.info "Система будет перезагружена для применения обновления..."
+        
+        # Отправка уведомления об успешной установке
+        send_notification \
+            "UMDU HAOS Обновление установлено" \
+            "Обновление Home Assistant OS успешно установлено. Система перезагружается..."
+        
+        # Перезагрузка системы через Supervisor API
+        sleep 5
+        curl -X POST -H "Authorization: Bearer $SUPERVISOR_TOKEN" \
+             "http://supervisor/host/reboot"
+        return 0
+    else
+        bashio::log.error "Ошибка установки обновления через RAUC"
+        
+        # Отправка уведомления об ошибке
+        send_notification \
+            "UMDU HAOS Ошибка обновления" \
+            "Произошла ошибка при установке обновления Home Assistant OS. Проверьте логи add-on."
+        
         return 1
     fi
 }
