@@ -261,7 +261,7 @@ download_update_file() {
     find "${SHARE_DIR}" -type f -name 'haos_umdu-k1-*.raucb' ! -name "haos_umdu-k1-${available_version}.raucb" -delete || true
     local download_path="${SHARE_DIR}/haos_umdu-k1-${available_version}.raucb"
     
-    host_share_dir="/usr/share/hassio/share/umdu-haos-updater"
+    host_share_dir="/mnt/data/supervisor/share/umdu-haos-updater"
     host_path="${host_share_dir}/haos_umdu-k1-${available_version}.raucb"
 
     # Если файл уже есть в контейнере
@@ -306,7 +306,7 @@ install_update_file() {
     fi
     
     # RAUC-daemon на хосте ожидает файл внутри /data/share
-    local host_update_file="/usr/share/hassio/share${update_file#/share}"
+    local host_update_file="/mnt/data/supervisor/share${update_file#/share}"
     
     echo "[INFO] Начинаем установку обновления..."
     echo "[INFO] Файл: ${host_update_file}"
