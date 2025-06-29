@@ -1,0 +1,29 @@
+docs/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Add-on specific
+data/
+downloads/
+*.raucb
+*.img
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+
+# Development
+test/
+debug/
