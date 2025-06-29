@@ -322,6 +322,21 @@ if ! check_supervisor_access; then
     exit 1
 fi
 
+# --- Автоподстановка MQTT параметров из Supervisor (если не заданы вручную) ---
+if [[ "$MQTT_DISCOVERY" == "true" && -z "$MQTT_HOST" ]]; then
+    svc_json=$(curl -s -H "Authorization: Bearer $SUPERVISOR_TOKEN" http://supervisor/services 2>/dev/null | jq '.data[]? | select(.service=="mqtt")') || true
+    if [[ -n "$svc_json" ]]; then
+        MQTT_HOST=$(echo "$svc_json" | jq -r '.host')
+        MQTT_PORT=$(echo "$svc_json" | jq -r '.port')
+        MQTT_USER=$(echo "$svc_json" | jq -r '.username // empty')
+        MQTT_PASSWORD=$(echo "$svc_json" | jq -r '.password // empty')
+        echo "[INFO] MQTT параметры получены от Supervisor: $MQTT_HOST:$MQTT_PORT"
+    else
+        echo "[WARNING] Supervisor не вернул параметры MQTT; discovery будет отключён"
+        MQTT_DISCOVERY="false"
+    fi
+fi
+
 # Основной цикл работы
 while true; do
     check_for_updates
