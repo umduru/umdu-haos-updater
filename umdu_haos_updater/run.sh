@@ -105,8 +105,8 @@ handle_mqtt_commands() {
     while read -r cmd; do
         log_debug "MQTT cmd recv: $cmd"
         if [[ "$cmd" == "install" ]]; then
-            # Берём версию из временного файла (актуальна после последней проверки)
-            avail_ver=$(cat /tmp/umdu_last_ver 2>/dev/null || true)
+            # Берём последнюю строку файла, отбираем последний "токен" (чистая версия)
+            avail_ver=$(awk '{print $NF}' /tmp/umdu_last_ver 2>/dev/null || true)
             if [[ -z "$avail_ver" ]]; then
                 echo "[ERROR] Неизвестна доступная версия — запустите проверку обновлений и попробуйте снова"
                 continue
@@ -201,7 +201,8 @@ check_for_updates() {
     local versions_url="https://raw.githubusercontent.com/umduru/umdu-haos-updater/main/versions.json?t=${timestamp}"
     local available_version=$(curl -s "${versions_url}" | jq -r '.hassos."umdu-k1"' 2>/dev/null)
     LAST_AVAILABLE_VERSION="$available_version"
-    echo "$available_version" > /tmp/umdu_last_ver
+    # Записываем чистое значение без таймштампа (printf обходит алиас echo)
+    printf '%s' "$available_version" > /tmp/umdu_last_ver
     
     if [[ -z "${available_version}" || "${available_version}" == "null" ]]; then
         echo "[WARNING] Не удалось получить информацию о доступных версиях"
