@@ -149,12 +149,43 @@ install_update_file() {
         return 1
     fi
     
-    bashio::log.info "Начинаем установку обновления через RAUC CLI..."
+    bashio::log.info "Начинаем установку обновления..."
     bashio::log.info "Файл: ${update_file}"
     
-    # Запуск установки
-    if rauc install "${update_file}"; then
-        bashio::log.info "Обновление успешно установлено!"
+    # Попробуем сначала RAUC CLI
+    if command -v rauc > /dev/null 2>&1; then
+        bashio::log.info "Используем RAUC CLI..."
+        if rauc install "${update_file}"; then
+            bashio::log.info "Обновление успешно установлено через RAUC CLI!"
+            install_success=true
+        else
+            bashio::log.warning "RAUC CLI не удалось, пробуем D-Bus API..."
+            install_success=false
+        fi
+    else
+        bashio::log.info "RAUC CLI недоступен, используем D-Bus API..."
+        install_success=false
+    fi
+    
+    # Если RAUC CLI не сработал, пробуем D-Bus
+    if [[ "${install_success}" != "true" ]]; then
+        if command -v busctl > /dev/null 2>&1; then
+            bashio::log.info "Установка через D-Bus API..."
+            if busctl call de.pengutronix.rauc / de.pengutronix.rauc.Installer Install s "${update_file}"; then
+                bashio::log.info "Обновление успешно установлено через D-Bus API!"
+                install_success=true
+            else
+                bashio::log.error "Ошибка установки через D-Bus API"
+                install_success=false
+            fi
+        else
+            bashio::log.error "D-Bus API также недоступен"
+            install_success=false
+        fi
+    fi
+    
+    # Обработка результата
+    if [[ "${install_success}" == "true" ]]; then
         bashio::log.info "Система будет перезагружена для применения обновления..."
         
         # Отправка уведомления об успешной установке
@@ -168,7 +199,7 @@ install_update_file() {
              "http://supervisor/host/reboot"
         return 0
     else
-        bashio::log.error "Ошибка установки обновления через RAUC"
+        bashio::log.error "Все методы установки не удались"
         
         # Отправка уведомления об ошибке
         send_notification \
