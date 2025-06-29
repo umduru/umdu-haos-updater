@@ -351,8 +351,12 @@ if [[ "$MQTT_DISCOVERY" == "true" ]]; then
         [[ -z "$MQTT_PASSWORD" ]] && MQTT_PASSWORD="$sup_pass"
         echo "[INFO] MQTT параметры Supervisor: $MQTT_HOST:$MQTT_PORT (user: $MQTT_USER)"
     else
-        echo "[WARNING] Supervisor не вернул данные mqtt; discovery выключен"
-        MQTT_DISCOVERY="false"
+        if [[ -z "$MQTT_HOST" ]]; then
+            echo "[WARNING] Supervisor не вернул данные mqtt; discovery отключён"
+            MQTT_DISCOVERY="false"
+        else
+            echo "[INFO] Supervisor не вернул данные mqtt, но параметры уже заданы (host: $MQTT_HOST)"
+        fi
     fi
 fi
 
