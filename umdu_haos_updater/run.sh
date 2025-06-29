@@ -41,6 +41,47 @@ SHARE_DIR="/share/umdu-haos-updater"
 # Переменная для хранения последней доступной версии
 LAST_AVAILABLE_VERSION=""
 
+# --- MQTT helper functions (должны быть определены ДО их использования) ---
+publish_mqtt() {
+    local topic="$1"; shift
+    local payload="$1"
+    if [[ "$MQTT_DISCOVERY" == "true" ]]; then
+        mosquitto_pub -h "$MQTT_HOST" -p "$MQTT_PORT" \
+            ${MQTT_USER:+-u "$MQTT_USER"} ${MQTT_PASSWORD:+-P "$MQTT_PASSWORD"} \
+            -r -t "$topic" -m "$payload" || echo "[WARNING] MQTT publish to $topic failed"
+    fi
+}
+
+publish_discovery() {
+    if [[ "$MQTT_DISCOVERY" != "true" ]]; then return; fi
+    local disc_topic="homeassistant/update/umdu_haos_k1/config"
+    local disc_payload='{"name":"UMDU HAOS K1","uniq_id":"umdu_haos_k1_os","stat_t":"umdu/haos_updater/state","json_attr_t":"umdu/haos_updater/state","cmd_t":"umdu/haos_updater/cmd","pl_inst":"install","ent_cat":"diagnostic"}'
+    publish_mqtt "$disc_topic" "$disc_payload"
+}
+
+publish_state() {
+    local installed="$1"; local latest="$2"
+    local state_payload="{\"installed_version\":\"$installed\",\"latest_version\":\"$latest\"}"
+    publish_mqtt "umdu/haos_updater/state" "$state_payload"
+}
+
+handle_mqtt_commands() {
+    if [[ "$MQTT_DISCOVERY" != "true" ]]; then return; fi
+    mosquitto_sub -h "$MQTT_HOST" -p "$MQTT_PORT" ${MQTT_USER:+-u "$MQTT_USER"} ${MQTT_PASSWORD:+-P "$MQTT_PASSWORD"} -t "umdu/haos_updater/cmd" |
+    while read cmd; do
+        if [[ "$cmd" == "install" && -n "$LAST_AVAILABLE_VERSION" ]]; then
+            echo "[INFO] Получена команда install через MQTT"
+            if update_file_path=$(download_update_file "$LAST_AVAILABLE_VERSION"); then
+                install_update_file "$update_file_path"
+            fi
+        fi
+    done &
+}
+
+# Инициализируем discovery и слушаем команды
+publish_discovery
+handle_mqtt_commands
+
 # Функция проверки доступности supervisor API
 check_supervisor_access() {
     if curl -s -H "Authorization: Bearer $SUPERVISOR_TOKEN" \
@@ -278,45 +319,4 @@ while true; do
     
     echo "[INFO] Ожидание ${UPDATE_INTERVAL} секунд до следующей проверки..."
     sleep "${UPDATE_INTERVAL}"
-done
-
-#--- MQTT helper functions ---
-publish_mqtt() {
-    local topic="$1"; shift
-    local payload="$1"
-    if [[ "$MQTT_DISCOVERY" == "true" ]]; then
-        mosquitto_pub -h "$MQTT_HOST" -p "$MQTT_PORT" \
-            ${MQTT_USER:+-u "$MQTT_USER"} ${MQTT_PASSWORD:+-P "$MQTT_PASSWORD"} \
-            -r -t "$topic" -m "$payload" || echo "[WARNING] MQTT publish to $topic failed"
-    fi
-}
-
-publish_discovery() {
-    if [[ "$MQTT_DISCOVERY" != "true" ]]; then return; fi
-    local disc_topic="homeassistant/update/umdu_haos_k1/config"
-    local disc_payload='{"name":"UMDU HAOS K1","uniq_id":"umdu_haos_k1_os","stat_t":"umdu/haos_updater/state","json_attr_t":"umdu/haos_updater/state","cmd_t":"umdu/haos_updater/cmd","pl_inst":"install","ent_cat":"diagnostic"}'
-    publish_mqtt "$disc_topic" "$disc_payload"
-}
-
-publish_state() {
-    local installed="$1"; local latest="$2"
-    local state_payload="{\"installed_version\":\"$installed\",\"latest_version\":\"$latest\"}"
-    publish_mqtt "umdu/haos_updater/state" "$state_payload"
-}
-
-handle_mqtt_commands() {
-    if [[ "$MQTT_DISCOVERY" != "true" ]]; then return; fi
-    mosquitto_sub -h "$MQTT_HOST" -p "$MQTT_PORT" ${MQTT_USER:+-u "$MQTT_USER"} ${MQTT_PASSWORD:+-P "$MQTT_PASSWORD"} -t "umdu/haos_updater/cmd" |
-    while read cmd; do
-        if [[ "$cmd" == "install" && -n "$LAST_AVAILABLE_VERSION" ]]; then
-            echo "[INFO] Получена команда install через MQTT"
-            if update_file_path=$(download_update_file "$LAST_AVAILABLE_VERSION"); then
-                install_update_file "$update_file_path"
-            fi
-        fi
-    done &
-}
-
-# Инициализируем discovery и слушаем команды
-publish_discovery
-handle_mqtt_commands 
+done 
