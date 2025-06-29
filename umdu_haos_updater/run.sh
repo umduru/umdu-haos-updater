@@ -261,6 +261,7 @@ download_update_file() {
     find "${SHARE_DIR}" -type f -name 'haos_umdu-k1-*.raucb' ! -name "haos_umdu-k1-${available_version}.raucb" -delete || true
     local download_path="${SHARE_DIR}/haos_umdu-k1-${available_version}.raucb"
     
+    # Хостовой путь (видимый RAUC) совпадает с /share, только префикс /mnt/data/supervisor
     host_share_dir="/mnt/data/supervisor/share/umdu-haos-updater"
     host_path="${host_share_dir}/haos_umdu-k1-${available_version}.raucb"
 
@@ -269,10 +270,8 @@ download_update_file() {
         echo "[INFO] Файл обновления уже существует: ${download_path}" >&2
         # Обеспечим наличие копии для RAUC
         mkdir -p "${host_share_dir}"
-        if [[ ! -f "${host_path}" ]]; then
-            echo "[INFO] Копирую файл в ${host_path} для доступа RAUC" >&2
-            cp -f "${download_path}" "${host_path}"
-        fi
+        echo "[INFO] Копирую файл в ${host_path} для доступа RAUC" >&2
+        # cp убран, RAUC видит файл напрямую через /mnt/data/supervisor/share
         command echo "${download_path}"
         return 0
     fi
@@ -287,7 +286,6 @@ download_update_file() {
         # Копируем в /data/share для RAUC
         mkdir -p "${host_share_dir}"
         echo "[INFO] Копирую файл в ${host_path} для доступа RAUC" >&2
-        cp -f "${download_path}" "${host_path}"
         command echo "${download_path}"
         return 0
     else
