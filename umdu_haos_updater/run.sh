@@ -23,11 +23,25 @@ UPDATE_INTERVAL=$(jq -r '.update_check_interval // 3600' "$CONFIG_FILE")
 AUTO_UPDATE=$(jq -r '.auto_update // false' "$CONFIG_FILE")
 BACKUP_BEFORE_UPDATE=$(jq -r '.backup_before_update // true' "$CONFIG_FILE")
 NOTIFICATIONS=$(jq -r '.notifications // true' "$CONFIG_FILE")
-MQTT_DISCOVERY=$(jq -r '.mqtt_discovery // true' "$CONFIG_FILE")
-MQTT_HOST=$(jq -r '.mqtt_host // "core-mosquitto"' "$CONFIG_FILE")
-MQTT_PORT=$(jq -r '.mqtt_port // 1883' "$CONFIG_FILE")
-MQTT_USER=$(jq -r '.mqtt_user // empty' "$CONFIG_FILE")
-MQTT_PASSWORD=$(jq -r '.mqtt_password // empty' "$CONFIG_FILE")
+
+# Настройки MQTT из options.json (префикс CFG_ — чтобы не перекрывать финальные переменные)
+CFG_MQTT_DISCOVERY=$(jq -r '.mqtt_discovery // true' "$CONFIG_FILE")
+CFG_MQTT_HOST=$(jq -r '.mqtt_host // "core-mosquitto"' "$CONFIG_FILE")
+CFG_MQTT_PORT=$(jq -r '.mqtt_port // 1883' "$CONFIG_FILE")
+CFG_MQTT_USER=$(jq -r '.mqtt_user // empty' "$CONFIG_FILE")
+CFG_MQTT_PASSWORD=$(jq -r '.mqtt_password // empty' "$CONFIG_FILE")
+
+# Инициализируем финальные переменные MQTT значениями из конфигурации
+MQTT_DISCOVERY="$CFG_MQTT_DISCOVERY"
+
+# Значения по умолчанию считаем "пустыми", чтобы их можно было заменить
+[[ "$CFG_MQTT_HOST" == "core-mosquitto" ]] && CFG_MQTT_HOST=""
+[[ "$CFG_MQTT_PORT" == "1883" ]] && CFG_MQTT_PORT=""
+
+MQTT_HOST="$CFG_MQTT_HOST"
+MQTT_PORT="$CFG_MQTT_PORT"
+MQTT_USER="$CFG_MQTT_USER"
+MQTT_PASSWORD="$CFG_MQTT_PASSWORD"
 
 echo "[INFO] Интервал проверки обновлений: ${UPDATE_INTERVAL} секунд"
 echo "[INFO] Автоматическое обновление: ${AUTO_UPDATE}"
@@ -331,9 +345,9 @@ if [[ "$MQTT_DISCOVERY" == "true" ]]; then
         sup_user=$(echo "$svc_json" | jq -r '.username // empty')
         sup_pass=$(echo "$svc_json" | jq -r '.password // empty')
 
-        # Подставляем, только если параметр пуст или равен "core-mosquitto" (значение по умолчанию)
-        [[ -z "$MQTT_HOST" || "$MQTT_HOST" == "core-mosquitto" ]] && MQTT_HOST="$sup_host"
-        [[ -z "$MQTT_PORT" || "$MQTT_PORT" == "1883" ]] && MQTT_PORT="$sup_port"
+        # Подставляем, только если переменная ещё не заполнена
+        [[ -z "$MQTT_HOST" ]] && MQTT_HOST="$sup_host"
+        [[ -z "$MQTT_PORT" ]] && MQTT_PORT="$sup_port"
         [[ -z "$MQTT_USER" ]] && MQTT_USER="$sup_user"
         [[ -z "$MQTT_PASSWORD" ]] && MQTT_PASSWORD="$sup_pass"
         echo "[INFO] MQTT параметры Supervisor: $MQTT_HOST:$MQTT_PORT (user: $MQTT_USER)"
@@ -343,12 +357,21 @@ if [[ "$MQTT_DISCOVERY" == "true" ]]; then
     fi
 fi
 
-# --- Fallback to env vars provided by HA for mqtt (homeassistant integration) ---
+# --- Fallback: переменные окружения Home Assistant ---
 if [[ "$MQTT_DISCOVERY" == "true" ]]; then
-  if [[ -z "$MQTT_USER" && -n "${HASSIO_MQTT_USERNAME:-}" ]]; then MQTT_USER="$HASSIO_MQTT_USERNAME"; fi
-  if [[ -z "$MQTT_PASSWORD" && -n "${HASSIO_MQTT_PASSWORD:-}" ]]; then MQTT_PASSWORD="$HASSIO_MQTT_PASSWORD"; fi
-  if [[ -z "$MQTT_USER" && -n "${HASS_MQTT_USERNAME:-}" ]]; then MQTT_USER="$HASS_MQTT_USERNAME"; fi
-  if [[ -z "$MQTT_PASSWORD" && -n "${HASS_MQTT_PASSWORD:-}" ]]; then MQTT_PASSWORD="$HASS_MQTT_PASSWORD"; fi
+    [[ -z "$MQTT_HOST" && -n "${HASSIO_MQTT_HOST:-${HASSIO_MQTT_ADDRESS:-}}" ]] && MQTT_HOST="${HASSIO_MQTT_HOST:-$HASSIO_MQTT_ADDRESS}"
+    [[ -z "$MQTT_PORT" && -n "${HASSIO_MQTT_PORT:-}" ]] && MQTT_PORT="$HASSIO_MQTT_PORT"
+    [[ -z "$MQTT_USER" && -n "${HASSIO_MQTT_USERNAME:-${HASS_MQTT_USERNAME:-}}" ]] && MQTT_USER="${HASSIO_MQTT_USERNAME:-$HASS_MQTT_USERNAME}"
+    [[ -z "$MQTT_PASSWORD" && -n "${HASSIO_MQTT_PASSWORD:-${HASS_MQTT_PASSWORD:-}}" ]] && MQTT_PASSWORD="${HASSIO_MQTT_PASSWORD:-$HASS_MQTT_PASSWORD}"
+fi
+
+# --- Финальный резервы по MQTT ---
+if [[ "$MQTT_DISCOVERY" == "true" ]]; then
+    [[ -z "$MQTT_PORT" ]] && MQTT_PORT="1883"
+    if [[ -z "$MQTT_HOST" ]]; then
+        echo "[WARNING] MQTT_HOST не определён — discovery будет отключён"
+        MQTT_DISCOVERY="false"
+    fi
 fi
 
 # Основной цикл работы
