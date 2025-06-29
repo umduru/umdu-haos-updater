@@ -52,9 +52,12 @@ publish_mqtt() {
     local topic="$1"; shift
     local payload="$1"
     if [[ "$MQTT_DISCOVERY" == "true" ]]; then
-        mosquitto_pub -h "$MQTT_HOST" -p "$MQTT_PORT" \
+        if ! mosquitto_pub -h "$MQTT_HOST" -p "$MQTT_PORT" \
             ${MQTT_USER:+-u "$MQTT_USER"} ${MQTT_PASSWORD:+-P "$MQTT_PASSWORD"} \
-            -r -t "$topic" -m "$payload" || echo "[WARNING] MQTT publish to $topic failed"
+            -r -t "$topic" -m "$payload" > /dev/null 2>&1; then
+            echo "[WARNING] MQTT publish to $topic failed (отключаю discovery до перезапуска)"
+            MQTT_DISCOVERY="false"
+        fi
     fi
 }
 
@@ -324,5 +327,6 @@ while true; do
     check_for_updates
     
     echo "[INFO] Ожидание ${UPDATE_INTERVAL} секунд до следующей проверки..."
+    echo ""  # пустая строка для читаемости
     sleep "${UPDATE_INTERVAL}"
 done 
