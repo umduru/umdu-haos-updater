@@ -7,10 +7,12 @@ bashio::log.info "Запуск UMDU HAOS Updater для K1..."
 UPDATE_INTERVAL=$(bashio::config 'update_check_interval')
 AUTO_UPDATE=$(bashio::config 'auto_update')
 BACKUP_BEFORE_UPDATE=$(bashio::config 'backup_before_update')
+NOTIFICATIONS=$(bashio::config 'notifications')
 
 bashio::log.info "Интервал проверки обновлений: ${UPDATE_INTERVAL} секунд"
 bashio::log.info "Автоматическое обновление: ${AUTO_UPDATE}"
 bashio::log.info "Резервное копирование перед обновлением: ${BACKUP_BEFORE_UPDATE}"
+bashio::log.info "Уведомления: ${NOTIFICATIONS}"
 
 # Функция проверки доступности supervisor API
 check_supervisor_access() {
@@ -29,6 +31,33 @@ get_current_haos_version() {
     local version=$(curl -s -H "Authorization: Bearer $SUPERVISOR_TOKEN" \
                    "http://supervisor/os/info" | jq -r '.data.version')
     echo "$version"
+}
+
+# Функция отправки уведомления в Home Assistant
+send_notification() {
+    local title="$1"
+    local message="$2"
+    
+    if [[ "${NOTIFICATIONS}" == "true" ]]; then
+        local notification_data=$(cat <<EOF
+{
+  "title": "${title}",
+  "message": "${message}",
+  "notification_id": "umdu_haos_updater"
+}
+EOF
+)
+        
+        if curl -s -X POST \
+           -H "Authorization: Bearer $SUPERVISOR_TOKEN" \
+           -H "Content-Type: application/json" \
+           -d "${notification_data}" \
+           "http://supervisor/core/api/services/persistent_notification/create" > /dev/null 2>&1; then
+            bashio::log.info "Уведомление отправлено в Home Assistant"
+        else
+            bashio::log.warning "Не удалось отправить уведомление в Home Assistant"
+        fi
+    fi
 }
 
 # Функция проверки обновлений
@@ -55,6 +84,12 @@ check_for_updates() {
         bashio::log.info "Система использует актуальную версию"
     else
         bashio::log.info "Доступно обновление: ${current_version} -> ${available_version}"
+        
+        # Отправка уведомления
+        send_notification \
+            "UMDU HAOS Обновление доступно" \
+            "Доступна новая версия Home Assistant OS для UMDU K1: ${available_version}. Текущая версия: ${current_version}."
+        
         # TODO: Добавить логику обновления когда будет готова
     fi
     
