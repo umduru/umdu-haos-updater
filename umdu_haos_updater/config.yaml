@@ -1,6 +1,6 @@
 name: "UMDU Home Assistant OS Updater"
 description: "Add-on для обновления форка HAOS для UMDU K1"
-version: "0.4.8"
+version: "0.4.9"
 slug: "umdu_haos_updater"
 init: false
 arch:

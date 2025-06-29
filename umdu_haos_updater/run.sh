@@ -364,6 +364,7 @@ if [[ "$MQTT_DISCOVERY" == "true" ]]; then
         [[ -z "$MQTT_USER" && -n "$sup_user" ]] && MQTT_USER="$sup_user"
         [[ -z "$MQTT_PASSWORD" && -n "$sup_pass" ]] && MQTT_PASSWORD="$sup_pass"
         echo "[INFO] MQTT параметры Supervisor: $MQTT_HOST:$MQTT_PORT (user: $MQTT_USER)"
+        log_debug "sup_host=$sup_host sup_port=$sup_port sup_user=$sup_user"
     elif [[ -z "$MQTT_HOST" ]]; then
         # Fallback к устаревшему API (общий список сервисов)
         old_json=$(curl -s -H "Authorization: Bearer $SUPERVISOR_TOKEN" http://supervisor/services 2>/dev/null | jq -c '.. | objects | select(.service? == "mqtt")' | head -n1 ) || true
@@ -379,6 +380,7 @@ if [[ "$MQTT_DISCOVERY" == "true" ]]; then
             [[ -z "$MQTT_USER" && -n "$sup_user" ]] && MQTT_USER="$sup_user"
             [[ -z "$MQTT_PASSWORD" && -n "$sup_pass" ]] && MQTT_PASSWORD="$sup_pass"
             echo "[INFO] MQTT параметры Supervisor (v1 API): $MQTT_HOST:$MQTT_PORT (user: $MQTT_USER)"
+            log_debug "sup_host=$sup_host sup_port=$sup_port sup_user=$sup_user"
         else
             echo "[WARNING] Supervisor не вернул данные mqtt; discovery будет отключён"
             MQTT_DISCOVERY="false"
