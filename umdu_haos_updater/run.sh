@@ -38,8 +38,25 @@ check_for_updates() {
     local current_version=$(get_current_haos_version)
     bashio::log.info "Текущая версия HAOS: ${current_version}"
     
-    # TODO: Здесь будет логика проверки обновлений из репозитория UMDU
-    # Пока просто логируем
+    # Получение доступной версии из репозитория
+    local versions_url="https://raw.githubusercontent.com/umduru/umdu-haos-updater/main/versions.json"
+    local available_version=$(curl -s "${versions_url}" | jq -r '.hassos."umdu-k1"' 2>/dev/null)
+    
+    if [[ -z "${available_version}" || "${available_version}" == "null" ]]; then
+        bashio::log.warning "Не удалось получить информацию о доступных версиях"
+        return 1
+    fi
+    
+    bashio::log.info "Доступная версия HAOS: ${available_version}"
+    
+    # Сравнение версий
+    if [[ "${current_version}" == "${available_version}" ]]; then
+        bashio::log.info "Система использует актуальную версию"
+    else
+        bashio::log.info "Доступно обновление: ${current_version} -> ${available_version}"
+        # TODO: Добавить логику обновления когда будет готова
+    fi
+    
     bashio::log.info "Проверка завершена"
 }
 
