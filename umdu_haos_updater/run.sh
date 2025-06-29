@@ -39,7 +39,8 @@ check_for_updates() {
     bashio::log.info "Текущая версия HAOS: ${current_version}"
     
     # Получение доступной версии из репозитория
-    local versions_url="https://raw.githubusercontent.com/umduru/umdu-haos-updater/main/versions.json"
+    local timestamp=$(date +%s)
+    local versions_url="https://raw.githubusercontent.com/umduru/umdu-haos-updater/main/versions.json?t=${timestamp}"
     local available_version=$(curl -s "${versions_url}" | jq -r '.hassos."umdu-k1"' 2>/dev/null)
     
     if [[ -z "${available_version}" || "${available_version}" == "null" ]]; then
