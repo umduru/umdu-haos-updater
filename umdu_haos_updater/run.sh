@@ -125,19 +125,19 @@ download_update_file() {
     
     # Проверка существования файла
     if [[ -f "${download_path}" ]]; then
-        echo "[INFO] Файл обновления уже существует: ${download_path}"
+        echo "[INFO] Файл обновления уже существует: ${download_path}" >&2
         echo "${download_path}"
         return 0
     fi
     
-    echo "[INFO] Загрузка обновления с ${update_url}..."
+    echo "[INFO] Загрузка обновления с ${update_url}..." >&2
     
     if curl -L -o "${download_path}" "${update_url}"; then
-        echo "[INFO] Файл обновления загружен: ${download_path}"
+        echo "[INFO] Файл обновления загружен: ${download_path}" >&2
         echo "${download_path}"
         return 0
     else
-        echo "[ERROR] Не удалось загрузить файл обновления"
+        echo "[ERROR] Не удалось загрузить файл обновления" >&2
         return 1
     fi
 }
@@ -156,16 +156,32 @@ install_update_file() {
     
     # Установка через RAUC CLI
     if command -v rauc > /dev/null 2>&1; then
-        echo "[INFO] Запускаем установку через RAUC CLI..."
-        if rauc install "${update_file}"; then
-            echo "[INFO] Обновление успешно установлено!"
+        echo "[INFO] RAUC CLI найден: $(which rauc)"
+        echo "[INFO] Запускаем установку: rauc install ${update_file}"
+        
+        # Запуск с детальным выводом
+        if rauc install "${update_file}" 2>&1; then
+            rauc_exit_code=$?
+            echo "[INFO] RAUC завершился с кодом: ${rauc_exit_code}"
+            
+            # Проверяем статус слотов после установки
+            echo "[INFO] Статус слотов после установки:"
+            rauc status 2>/dev/null || echo "[WARNING] Не удалось получить статус слотов"
+            
+            echo "[SUCCESS] Обновление успешно установлено!"
             install_success=true
         else
-            echo "[ERROR] Ошибка установки через RAUC CLI"
+            rauc_exit_code=$?
+            echo "[ERROR] RAUC завершился с ошибкой, код: ${rauc_exit_code}"
+            echo "[INFO] Попытка получить статус слотов для диагностики:"
+            rauc status 2>/dev/null || echo "[WARNING] Статус слотов недоступен"
             install_success=false
         fi
     else
-        echo "[ERROR] RAUC CLI недоступен (требуются системные привилегии)"
+        echo "[ERROR] RAUC CLI недоступен в PATH"
+        echo "[DEBUG] Содержимое PATH: ${PATH}"
+        echo "[DEBUG] Проверка /usr/bin/rauc: $(ls -la /usr/bin/rauc 2>/dev/null || echo 'не найден')"
+        echo "[DEBUG] Проверка /sbin/rauc: $(ls -la /sbin/rauc 2>/dev/null || echo 'не найден')"
         install_success=false
     fi
     
