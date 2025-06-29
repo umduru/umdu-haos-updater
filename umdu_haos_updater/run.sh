@@ -96,6 +96,24 @@ check_for_updates() {
     bashio::log.info "Проверка завершена"
 }
 
+# Функция загрузки файла обновления
+download_update_file() {
+    local available_version="$1"
+    local update_url="https://github.com/umduru/umdu-haos-updater/releases/download/rauc/haos_umdu-k1-${available_version}.raucb"
+    local download_path="/tmp/haos_update.raucb"
+    
+    bashio::log.info "Загрузка обновления с ${update_url}..."
+    
+    if curl -L -o "${download_path}" "${update_url}"; then
+        bashio::log.info "Файл обновления загружен: ${download_path}"
+        echo "${download_path}"
+        return 0
+    else
+        bashio::log.error "Не удалось загрузить файл обновления"
+        return 1
+    fi
+}
+
 # Проверка доступа к supervisor при запуске
 if ! check_supervisor_access; then
     bashio::log.error "Невозможно получить доступ к Supervisor. Проверьте настройки add-on'а"
