@@ -90,25 +90,26 @@ check_for_updates() {
             "UMDU HAOS Обновление доступно" \
             "Доступна новая версия Home Assistant OS для UMDU K1: ${available_version}. Текущая версия: ${current_version}."
         
-        # Загрузка файла обновления
-        if update_file_path=$(download_update_file "${available_version}"); then
+        # Проверка режима обновления
+        if [[ "${AUTO_UPDATE}" == "true" ]]; then
+            bashio::log.info "Автоматическое обновление включено, загружаем и устанавливаем..."
             
-            # Проверка режима обновления
-            if [[ "${AUTO_UPDATE}" == "true" ]]; then
-                bashio::log.info "Автоматическое обновление включено, начинаем установку..."
+            # Загрузка файла обновления
+            if update_file_path=$(download_update_file "${available_version}"); then
+                bashio::log.info "Начинаем установку..."
                 install_update_file "${update_file_path}"
             else
-                bashio::log.info "Файл обновления загружен и готов к ручной установке"
-                bashio::log.info "Местоположение файла: ${update_file_path}"
-                bashio::log.info "Для автоматической установки включите 'auto_update: true' в настройках add-on"
-                
-                # Отправка уведомления о готовности к ручной установке
-                send_notification \
-                    "UMDU HAOS Файл обновления готов" \
-                    "Файл обновления загружен: ${available_version}. Для автоматической установки включите auto_update в настройках add-on."
+                bashio::log.error "Ошибка загрузки файла обновления"
             fi
         else
-            bashio::log.error "Ошибка загрузки файла обновления"
+            bashio::log.info "Автоматическое обновление отключено"
+            bashio::log.info "Доступна версия: ${available_version}. Текущая: ${current_version}"
+            bashio::log.info "Для автоматической загрузки и установки включите 'auto_update: true' в настройках add-on"
+            
+            # Отправка уведомления о доступности обновления
+            send_notification \
+                "UMDU HAOS Обновление доступно" \
+                "Доступна версия: ${available_version}. Для автоматической установки включите auto_update в настройках add-on."
         fi
     fi
     
@@ -152,36 +153,19 @@ install_update_file() {
     bashio::log.info "Начинаем установку обновления..."
     bashio::log.info "Файл: ${update_file}"
     
-    # Попробуем сначала RAUC CLI
+    # Установка через RAUC CLI
     if command -v rauc > /dev/null 2>&1; then
-        bashio::log.info "Используем RAUC CLI..."
+        bashio::log.info "Запускаем установку через RAUC CLI..."
         if rauc install "${update_file}"; then
-            bashio::log.info "Обновление успешно установлено через RAUC CLI!"
+            bashio::log.info "Обновление успешно установлено!"
             install_success=true
         else
-            bashio::log.warning "RAUC CLI не удалось, пробуем D-Bus API..."
+            bashio::log.error "Ошибка установки через RAUC CLI"
             install_success=false
         fi
     else
-        bashio::log.info "RAUC CLI недоступен, используем D-Bus API..."
+        bashio::log.error "RAUC CLI недоступен (требуются системные привилегии)"
         install_success=false
-    fi
-    
-    # Если RAUC CLI не сработал, пробуем D-Bus
-    if [[ "${install_success}" != "true" ]]; then
-        if command -v busctl > /dev/null 2>&1; then
-            bashio::log.info "Установка через D-Bus API..."
-            if busctl call de.pengutronix.rauc / de.pengutronix.rauc.Installer Install s "${update_file}"; then
-                bashio::log.info "Обновление успешно установлено через D-Bus API!"
-                install_success=true
-            else
-                bashio::log.error "Ошибка установки через D-Bus API"
-                install_success=false
-            fi
-        else
-            bashio::log.error "D-Bus API также недоступен"
-            install_success=false
-        fi
     fi
     
     # Обработка результата
@@ -199,7 +183,7 @@ install_update_file() {
              "http://supervisor/host/reboot"
         return 0
     else
-        bashio::log.error "Все методы установки не удались"
+        bashio::log.error "Установка обновления не удалась"
         
         # Отправка уведомления об ошибке
         send_notification \
