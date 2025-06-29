@@ -322,17 +322,23 @@ if ! check_supervisor_access; then
     exit 1
 fi
 
-# --- Автоподстановка MQTT параметров из Supervisor (если не заданы вручную) ---
-if [[ "$MQTT_DISCOVERY" == "true" && -z "$MQTT_HOST" ]]; then
-    svc_json=$(curl -s -H "Authorization: Bearer $SUPERVISOR_TOKEN" http://supervisor/services 2>/dev/null | jq '.data[]? | select(.service=="mqtt")') || true
+# --- Автоподстановка MQTT параметров из Supervisor ---
+if [[ "$MQTT_DISCOVERY" == "true" ]]; then
+    svc_json=$(curl -s -H "Authorization: Bearer $SUPERVISOR_TOKEN" http://supervisor/services 2>/dev/null | jq -r '.data[]? | select(.service=="mqtt")') || true
     if [[ -n "$svc_json" ]]; then
-        MQTT_HOST=$(echo "$svc_json" | jq -r '.host')
-        MQTT_PORT=$(echo "$svc_json" | jq -r '.port')
-        MQTT_USER=$(echo "$svc_json" | jq -r '.username // empty')
-        MQTT_PASSWORD=$(echo "$svc_json" | jq -r '.password // empty')
-        echo "[INFO] MQTT параметры получены от Supervisor: $MQTT_HOST:$MQTT_PORT"
+        sup_host=$(echo "$svc_json" | jq -r '.host')
+        sup_port=$(echo "$svc_json" | jq -r '.port')
+        sup_user=$(echo "$svc_json" | jq -r '.username // empty')
+        sup_pass=$(echo "$svc_json" | jq -r '.password // empty')
+
+        # Подставляем, только если параметр пуст или равен "core-mosquitto" (значение по умолчанию)
+        [[ -z "$MQTT_HOST" || "$MQTT_HOST" == "core-mosquitto" ]] && MQTT_HOST="$sup_host"
+        [[ -z "$MQTT_PORT" || "$MQTT_PORT" == "1883" ]] && MQTT_PORT="$sup_port"
+        [[ -z "$MQTT_USER" ]] && MQTT_USER="$sup_user"
+        [[ -z "$MQTT_PASSWORD" ]] && MQTT_PASSWORD="$sup_pass"
+        echo "[INFO] MQTT параметры Supervisor: $MQTT_HOST:$MQTT_PORT (user: $MQTT_USER)"
     else
-        echo "[WARNING] Supervisor не вернул параметры MQTT; discovery будет отключён"
+        echo "[WARNING] Supervisor не вернул данные mqtt; discovery выключен"
         MQTT_DISCOVERY="false"
     fi
 fi
