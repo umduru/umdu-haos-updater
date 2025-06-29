@@ -261,9 +261,18 @@ download_update_file() {
     find "${SHARE_DIR}" -type f -name 'haos_umdu-k1-*.raucb' ! -name "haos_umdu-k1-${available_version}.raucb" -delete || true
     local download_path="${SHARE_DIR}/haos_umdu-k1-${available_version}.raucb"
     
-    # Проверка существования файла
+    host_share_dir="/data/share/umdu-haos-updater"
+    host_path="${host_share_dir}/haos_umdu-k1-${available_version}.raucb"
+
+    # Если файл уже есть в контейнере
     if [[ -f "${download_path}" ]]; then
         echo "[INFO] Файл обновления уже существует: ${download_path}" >&2
+        # Обеспечим наличие копии для RAUC
+        mkdir -p "${host_share_dir}"
+        if [[ ! -f "${host_path}" ]]; then
+            echo "[INFO] Копирую файл в ${host_path} для доступа RAUC" >&2
+            cp -f "${download_path}" "${host_path}"
+        fi
         command echo "${download_path}"
         return 0
     fi
@@ -275,6 +284,10 @@ download_update_file() {
     # --retry-delay 5 : пауза 5 сек
     if curl -# -L --fail --retry 3 --retry-delay 5 -o "${download_path}" "${update_url}"; then
         echo "[INFO] Файл обновления загружен: ${download_path}" >&2
+        # Копируем в /data/share для RAUC
+        mkdir -p "${host_share_dir}"
+        echo "[INFO] Копирую файл в ${host_path} для доступа RAUC" >&2
+        cp -f "${download_path}" "${host_path}"
         command echo "${download_path}"
         return 0
     else
@@ -292,8 +305,8 @@ install_update_file() {
         return 1
     fi
     
-    # RAUC-daemon на хосте видит тот же /share, поэтому передаём исходный путь
-    local host_update_file="${update_file}"
+    # RAUC-daemon на хосте ожидает файл внутри /data/share
+    local host_update_file="/data/share${update_file#/share}"
     
     echo "[INFO] Начинаем установку обновления..."
     echo "[INFO] Файл: ${host_update_file}"
