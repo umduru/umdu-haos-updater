@@ -90,7 +90,12 @@ check_for_updates() {
             "UMDU HAOS Обновление доступно" \
             "Доступна новая версия Home Assistant OS для UMDU K1: ${available_version}. Текущая версия: ${current_version}."
         
-        # TODO: Добавить логику обновления когда будет готова
+        # Загрузка файла обновления
+        if download_update_file "${available_version}"; then
+            bashio::log.info "Файл обновления готов к установке"
+        else
+            bashio::log.error "Ошибка загрузки файла обновления"
+        fi
     fi
     
     bashio::log.info "Проверка завершена"
