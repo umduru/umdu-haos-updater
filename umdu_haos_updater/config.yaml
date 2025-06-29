@@ -21,6 +21,7 @@ options:
   mqtt_port: 1883
   mqtt_user: ""
   mqtt_password: ""
+  debug: false
 schema:
   update_check_interval: int(300,86400)
   auto_update: bool
@@ -31,6 +32,7 @@ schema:
   mqtt_port: port?
   mqtt_user: str?
   mqtt_password: str?
+  debug: bool
 map:
   - type: share
     read_only: false
