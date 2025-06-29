@@ -155,6 +155,8 @@ download_update_file() {
     local update_url="https://github.com/umduru/umdu-haos-updater/releases/download/rauc/haos_umdu-k1-${available_version}.raucb"
     # Ensure shared directory exists
     mkdir -p "${SHARE_DIR}"
+    # Удаляем старые бандлы, чтобы не смешивались версии
+    find "${SHARE_DIR}" -type f -name 'haos_umdu-k1-*.raucb' ! -name "haos_umdu-k1-${available_version}.raucb" -delete || true
     local download_path="${SHARE_DIR}/haos_umdu-k1-${available_version}.raucb"
     
     # Проверка существования файла
@@ -188,16 +190,19 @@ install_update_file() {
         return 1
     fi
     
+    # Путь, который увидит RAUC-daemon на хосте
+    local host_update_file="/mnt/data/supervisor/share${update_file#/share}"
+    
     echo "[INFO] Начинаем установку обновления..."
-    echo "[INFO] Файл: ${update_file}"
+    echo "[INFO] Файл: ${host_update_file}"
     
     # Установка через RAUC CLI
     if command -v rauc > /dev/null 2>&1; then
         echo "[INFO] RAUC CLI найден: $(which rauc)"
-        echo "[INFO] Запускаем установку: rauc install ${update_file}"
+        echo "[INFO] Запускаем установку: rauc install ${host_update_file}"
         
         # Запуск с детальным выводом
-        if rauc install "${update_file}" 2>&1; then
+        if rauc install "${host_update_file}" 2>&1; then
             rauc_exit_code=$?
             echo "[INFO] RAUC завершился с кодом: ${rauc_exit_code}"
             
