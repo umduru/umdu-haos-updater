@@ -369,10 +369,10 @@ if [[ "$MQTT_DISCOVERY" == "true" ]]; then
         # Fallback к устаревшему API (общий список сервисов)
         old_json=$(curl -s -H "Authorization: Bearer $SUPERVISOR_TOKEN" http://supervisor/services 2>/dev/null | jq -c '.. | objects | select(.service? == "mqtt")' | head -n1 ) || true
         if [[ -n "$old_json" ]]; then
-            sup_host=$(echo "$old_json" | jq -r '.host // empty')
-            sup_port=$(echo "$old_json" | jq -r '.port // 1883')
-            sup_user=$(echo "$old_json" | jq -r '.username // empty')
-            sup_pass=$(echo "$old_json" | jq -r '.password // empty')
+            sup_host=$(printf '%s' "$old_json" | jq -r '.host // empty')
+            sup_port=$(printf '%s' "$old_json" | jq -r '.port // 1883')
+            sup_user=$(printf '%s' "$old_json" | jq -r '.username // empty')
+            sup_pass=$(printf '%s' "$old_json" | jq -r '.password // empty')
 
             [[ -z "$MQTT_HOST" && -n "$sup_host" ]] && MQTT_HOST="$sup_host"
             [[ -z "$MQTT_PORT" && -n "$sup_port" ]] && MQTT_PORT="$sup_port"
