@@ -30,7 +30,7 @@ echo "[INFO] Резервное копирование перед обновле
 echo "[INFO] Уведомления: ${NOTIFICATIONS}"
 
 # Global constants
-SHARE_DIR="/mnt/data/supervisor/share/umdu-haos-updater"
+SHARE_DIR="/share/umdu-haos-updater"
 
 # Функция проверки доступности supervisor API
 check_supervisor_access() {
