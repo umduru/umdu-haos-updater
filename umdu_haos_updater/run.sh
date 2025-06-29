@@ -351,10 +351,10 @@ if [[ "$MQTT_DISCOVERY" == "true" ]]; then
     log_debug "/services/mqtt: $sup_resp"
 
     # Пытаемся вынуть данные, не полагаясь на поле result, так как у некоторых версий Supervisоr оно может отсутствовать
-    sup_host=$(echo "$sup_resp" | jq -r '.data.host // empty' 2>/dev/null || echo "")
-    sup_port=$(echo "$sup_resp" | jq -r '.data.port // empty' 2>/dev/null || echo "")
-    sup_user=$(echo "$sup_resp" | jq -r  '.data.username // empty' 2>/dev/null || echo "")
-    sup_pass=$(echo "$sup_resp" | jq -r  '.data.password // empty' 2>/dev/null || echo "")
+    sup_host=$(printf '%s' "$sup_resp" | jq -r '.data.host // empty' 2>/dev/null || echo "")
+    sup_port=$(printf '%s' "$sup_resp" | jq -r '.data.port // empty' 2>/dev/null || echo "")
+    sup_user=$(printf '%s' "$sup_resp" | jq -r '.data.username // empty' 2>/dev/null || echo "")
+    sup_pass=$(printf '%s' "$sup_resp" | jq -r '.data.password // empty' 2>/dev/null || echo "")
 
     if [[ -n "$sup_host" ]]; then
         # Подставляем, только если переменная ещё не заполнена
