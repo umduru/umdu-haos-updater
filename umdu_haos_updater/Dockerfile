@@ -17,4 +17,6 @@ WORKDIR /app
 COPY run.sh /
 RUN chmod a+x /run.sh
 
-CMD [ "/run.sh" ] 
+# Отключаем S6 overlay и используем простой bash
+ENTRYPOINT []
+CMD [ "/bin/bash", "/run.sh" ] 

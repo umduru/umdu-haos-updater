@@ -1,27 +1,28 @@
-#!/usr/bin/with-contenv bashio
+#!/bin/bash
 
 # Логирование начала работы
-bashio::log.info "Запуск UMDU HAOS Updater для K1..."
+echo "[INFO] Запуск UMDU HAOS Updater для K1..."
 
-# Чтение конфигурации
-UPDATE_INTERVAL=$(bashio::config 'update_check_interval')
-AUTO_UPDATE=$(bashio::config 'auto_update')
-BACKUP_BEFORE_UPDATE=$(bashio::config 'backup_before_update')
-NOTIFICATIONS=$(bashio::config 'notifications')
+# Чтение конфигурации из /data/options.json
+CONFIG_FILE="/data/options.json"
+UPDATE_INTERVAL=$(jq -r '.update_check_interval // 3600' "$CONFIG_FILE")
+AUTO_UPDATE=$(jq -r '.auto_update // false' "$CONFIG_FILE")
+BACKUP_BEFORE_UPDATE=$(jq -r '.backup_before_update // true' "$CONFIG_FILE")
+NOTIFICATIONS=$(jq -r '.notifications // true' "$CONFIG_FILE")
 
-bashio::log.info "Интервал проверки обновлений: ${UPDATE_INTERVAL} секунд"
-bashio::log.info "Автоматическое обновление: ${AUTO_UPDATE}"
-bashio::log.info "Резервное копирование перед обновлением: ${BACKUP_BEFORE_UPDATE}"
-bashio::log.info "Уведомления: ${NOTIFICATIONS}"
+echo "[INFO] Интервал проверки обновлений: ${UPDATE_INTERVAL} секунд"
+echo "[INFO] Автоматическое обновление: ${AUTO_UPDATE}"
+echo "[INFO] Резервное копирование перед обновлением: ${BACKUP_BEFORE_UPDATE}"
+echo "[INFO] Уведомления: ${NOTIFICATIONS}"
 
 # Функция проверки доступности supervisor API
 check_supervisor_access() {
     if curl -s -H "Authorization: Bearer $SUPERVISOR_TOKEN" \
        "http://supervisor/supervisor/info" > /dev/null 2>&1; then
-        bashio::log.info "Доступ к Supervisor API получен"
+        echo "[INFO] Доступ к Supervisor API получен"
         return 0
     else
-        bashio::log.error "Нет доступа к Supervisor API"
+        echo "[ERROR] Нет доступа к Supervisor API"
         return 1
     fi
 }
@@ -53,19 +54,19 @@ EOF
            -H "Content-Type: application/json" \
            -d "${notification_data}" \
            "http://supervisor/core/api/services/persistent_notification/create" > /dev/null 2>&1; then
-            bashio::log.info "Уведомление отправлено в Home Assistant"
+            echo "[INFO] Уведомление отправлено в Home Assistant"
         else
-            bashio::log.warning "Не удалось отправить уведомление в Home Assistant"
+            echo "[WARNING] Не удалось отправить уведомление в Home Assistant"
         fi
     fi
 }
 
 # Функция проверки обновлений
 check_for_updates() {
-    bashio::log.info "Проверка доступных обновлений HAOS для UMDU K1..."
+    echo "[INFO] Проверка доступных обновлений HAOS для UMDU K1..."
     
     local current_version=$(get_current_haos_version)
-    bashio::log.info "Текущая версия HAOS: ${current_version}"
+    echo "[INFO] Текущая версия HAOS: ${current_version}"
     
     # Получение доступной версии из репозитория
     local timestamp=$(date +%s)
@@ -73,17 +74,17 @@ check_for_updates() {
     local available_version=$(curl -s "${versions_url}" | jq -r '.hassos."umdu-k1"' 2>/dev/null)
     
     if [[ -z "${available_version}" || "${available_version}" == "null" ]]; then
-        bashio::log.warning "Не удалось получить информацию о доступных версиях"
+        echo "[WARNING] Не удалось получить информацию о доступных версиях"
         return 1
     fi
     
-    bashio::log.info "Доступная версия HAOS: ${available_version}"
+    echo "[INFO] Доступная версия HAOS: ${available_version}"
     
     # Сравнение версий
     if [[ "${current_version}" == "${available_version}" ]]; then
-        bashio::log.info "Система использует актуальную версию"
+        echo "[INFO] Система использует актуальную версию"
     else
-        bashio::log.info "Доступно обновление: ${current_version} -> ${available_version}"
+        echo "[INFO] Доступно обновление: ${current_version} -> ${available_version}"
         
         # Отправка уведомления
         send_notification \
@@ -92,19 +93,19 @@ check_for_updates() {
         
         # Проверка режима обновления
         if [[ "${AUTO_UPDATE}" == "true" ]]; then
-            bashio::log.info "Автоматическое обновление включено, загружаем и устанавливаем..."
+            echo "[INFO] Автоматическое обновление включено, загружаем и устанавливаем..."
             
             # Загрузка файла обновления
             if update_file_path=$(download_update_file "${available_version}"); then
-                bashio::log.info "Начинаем установку..."
+                echo "[INFO] Начинаем установку..."
                 install_update_file "${update_file_path}"
             else
-                bashio::log.error "Ошибка загрузки файла обновления"
+                echo "[ERROR] Ошибка загрузки файла обновления"
             fi
         else
-            bashio::log.info "Автоматическое обновление отключено"
-            bashio::log.info "Доступна версия: ${available_version}. Текущая: ${current_version}"
-            bashio::log.info "Для автоматической загрузки и установки включите 'auto_update: true' в настройках add-on"
+            echo "[INFO] Автоматическое обновление отключено"
+            echo "[INFO] Доступна версия: ${available_version}. Текущая: ${current_version}"
+            echo "[INFO] Для автоматической загрузки и установки включите 'auto_update: true' в настройках add-on"
             
             # Отправка уведомления о доступности обновления
             send_notification \
@@ -113,7 +114,7 @@ check_for_updates() {
         fi
     fi
     
-    bashio::log.info "Проверка завершена"
+    echo "[INFO] Проверка завершена"
 }
 
 # Функция загрузки файла обновления
@@ -124,19 +125,19 @@ download_update_file() {
     
     # Проверка существования файла
     if [[ -f "${download_path}" ]]; then
-        bashio::log.info "Файл обновления уже существует: ${download_path}"
+        echo "[INFO] Файл обновления уже существует: ${download_path}"
         echo "${download_path}"
         return 0
     fi
     
-    bashio::log.info "Загрузка обновления с ${update_url}..."
+    echo "[INFO] Загрузка обновления с ${update_url}..."
     
     if curl -L -o "${download_path}" "${update_url}"; then
-        bashio::log.info "Файл обновления загружен: ${download_path}"
+        echo "[INFO] Файл обновления загружен: ${download_path}"
         echo "${download_path}"
         return 0
     else
-        bashio::log.error "Не удалось загрузить файл обновления"
+        echo "[ERROR] Не удалось загрузить файл обновления"
         return 1
     fi
 }
@@ -146,31 +147,31 @@ install_update_file() {
     local update_file="$1"
     
     if [[ ! -f "${update_file}" ]]; then
-        bashio::log.error "Файл обновления не найден: ${update_file}"
+        echo "[ERROR] Файл обновления не найден: ${update_file}"
         return 1
     fi
     
-    bashio::log.info "Начинаем установку обновления..."
-    bashio::log.info "Файл: ${update_file}"
+    echo "[INFO] Начинаем установку обновления..."
+    echo "[INFO] Файл: ${update_file}"
     
     # Установка через RAUC CLI
     if command -v rauc > /dev/null 2>&1; then
-        bashio::log.info "Запускаем установку через RAUC CLI..."
+        echo "[INFO] Запускаем установку через RAUC CLI..."
         if rauc install "${update_file}"; then
-            bashio::log.info "Обновление успешно установлено!"
+            echo "[INFO] Обновление успешно установлено!"
             install_success=true
         else
-            bashio::log.error "Ошибка установки через RAUC CLI"
+            echo "[ERROR] Ошибка установки через RAUC CLI"
             install_success=false
         fi
     else
-        bashio::log.error "RAUC CLI недоступен (требуются системные привилегии)"
+        echo "[ERROR] RAUC CLI недоступен (требуются системные привилегии)"
         install_success=false
     fi
     
     # Обработка результата
     if [[ "${install_success}" == "true" ]]; then
-        bashio::log.info "Система будет перезагружена для применения обновления..."
+        echo "[INFO] Система будет перезагружена для применения обновления..."
         
         # Отправка уведомления об успешной установке
         send_notification \
@@ -183,7 +184,7 @@ install_update_file() {
              "http://supervisor/host/reboot"
         return 0
     else
-        bashio::log.error "Установка обновления не удалась"
+        echo "[ERROR] Установка обновления не удалась"
         
         # Отправка уведомления об ошибке
         send_notification \
@@ -196,7 +197,7 @@ install_update_file() {
 
 # Проверка доступа к supervisor при запуске
 if ! check_supervisor_access; then
-    bashio::log.error "Невозможно получить доступ к Supervisor. Проверьте настройки add-on'а"
+    echo "[ERROR] Невозможно получить доступ к Supervisor. Проверьте настройки add-on'а"
     exit 1
 fi
 
@@ -204,6 +205,6 @@ fi
 while true; do
     check_for_updates
     
-    bashio::log.info "Ожидание ${UPDATE_INTERVAL} секунд до следующей проверки..."
+    echo "[INFO] Ожидание ${UPDATE_INTERVAL} секунд до следующей проверки..."
     sleep "${UPDATE_INTERVAL}"
 done 
