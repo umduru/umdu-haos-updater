@@ -10,7 +10,8 @@ RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/reposit
     jq \
     ca-certificates \
     dbus \
-    rauc
+    rauc \
+    mosquitto-clients
 
 # Создание рабочей директории
 WORKDIR /app
