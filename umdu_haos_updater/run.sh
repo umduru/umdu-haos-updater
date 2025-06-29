@@ -261,21 +261,8 @@ download_update_file() {
     find "${SHARE_DIR}" -type f -name 'haos_umdu-k1-*.raucb' ! -name "haos_umdu-k1-${available_version}.raucb" -delete || true
     local download_path="${SHARE_DIR}/haos_umdu-k1-${available_version}.raucb"
     
-    # Хостовой путь (видимый RAUC) совпадает с /share, только префикс /mnt/data/supervisor
-    host_share_dir="/mnt/data/supervisor/share/umdu-haos-updater"
-    host_path="${host_share_dir}/haos_umdu-k1-${available_version}.raucb"
+    # Никакого копирования не требуется – RAUC видит /share так же, как контейнер
 
-    # Если файл уже есть в контейнере
-    if [[ -f "${download_path}" ]]; then
-        echo "[INFO] Файл обновления уже существует: ${download_path}" >&2
-        # Обеспечим наличие копии для RAUC
-        mkdir -p "${host_share_dir}"
-        echo "[INFO] Копирую файл в ${host_path} для доступа RAUC" >&2
-        # cp убран, RAUC видит файл напрямую через /mnt/data/supervisor/share
-        command echo "${download_path}"
-        return 0
-    fi
-    
     echo "[INFO] Загрузка обновления с ${update_url}..." >&2
     
     # --fail      : прервать по HTTP-ошибке
@@ -283,10 +270,7 @@ download_update_file() {
     # --retry-delay 5 : пауза 5 сек
     if curl -# -L --fail --retry 3 --retry-delay 5 -o "${download_path}" "${update_url}"; then
         echo "[INFO] Файл обновления загружен: ${download_path}" >&2
-        # Копируем в /data/share для RAUC
-        mkdir -p "${host_share_dir}"
-        echo "[INFO] Копирую файл в ${host_path} для доступа RAUC" >&2
-        command echo "${download_path}"
+        # Копирование не требуется
         return 0
     else
         echo "[ERROR] Не удалось загрузить файл обновления" >&2
@@ -303,8 +287,8 @@ install_update_file() {
         return 1
     fi
     
-    # RAUC-daemon на хосте ожидает файл внутри /data/share
-    local host_update_file="/mnt/data/supervisor/share${update_file#/share}"
+    # RAUC видит /share напрямую, передаём исходный путь
+    local host_update_file="${update_file}"
     
     echo "[INFO] Начинаем установку обновления..."
     echo "[INFO] Файл: ${host_update_file}"
