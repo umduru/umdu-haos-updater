@@ -104,9 +104,15 @@ handle_mqtt_commands() {
         -t "umdu/haos_updater/cmd" 2>/tmp/mqtt_sub_err.log |
     while read -r cmd; do
         log_debug "MQTT cmd recv: $cmd"
-        if [[ "$cmd" == "install" && -n "$LAST_AVAILABLE_VERSION" ]]; then
-            echo "[INFO] Получена команда install через MQTT; начинаем обновление..."
-            if update_file_path=$(download_update_file "$LAST_AVAILABLE_VERSION"); then
+        if [[ "$cmd" == "install" ]]; then
+            # Берём версию из временного файла (актуальна после последней проверки)
+            avail_ver=$(cat /tmp/umdu_last_ver 2>/dev/null || true)
+            if [[ -z "$avail_ver" ]]; then
+                echo "[ERROR] Неизвестна доступная версия — запустите проверку обновлений и попробуйте снова"
+                continue
+            fi
+            echo "[INFO] Получена команда install через MQTT; версия к установке: $avail_ver"
+            if update_file_path=$(download_update_file "$avail_ver"); then
                 install_update_file "$update_file_path"
             else
                 echo "[ERROR] Не удалось загрузить файл обновления после команды install"
@@ -195,6 +201,7 @@ check_for_updates() {
     local versions_url="https://raw.githubusercontent.com/umduru/umdu-haos-updater/main/versions.json?t=${timestamp}"
     local available_version=$(curl -s "${versions_url}" | jq -r '.hassos."umdu-k1"' 2>/dev/null)
     LAST_AVAILABLE_VERSION="$available_version"
+    echo "$available_version" > /tmp/umdu_last_ver
     
     if [[ -z "${available_version}" || "${available_version}" == "null" ]]; then
         echo "[WARNING] Не удалось получить информацию о доступных версиях"
