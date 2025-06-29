@@ -86,7 +86,7 @@ publish_mqtt() {
 publish_discovery() {
     if [[ "$MQTT_DISCOVERY" != "true" ]]; then return; fi
     local disc_topic="homeassistant/update/umdu_haos_k1/config"
-    local disc_payload='{"name":"UMDU HAOS K1","uniq_id":"umdu_haos_k1_os","stat_t":"umdu/haos_updater/state","json_attr_t":"umdu/haos_updater/state","cmd_t":"umdu/haos_updater/cmd","pl_inst":"install","ent_cat":"diagnostic"}'
+    local disc_payload='{"name":"Home Assistant OS for UMDU K1","uniq_id":"umdu_haos_k1_os","stat_t":"umdu/haos_updater/state","json_attr_t":"umdu/haos_updater/state","cmd_t":"umdu/haos_updater/cmd","pl_inst":"install","ent_cat":"diagnostic"}'
     publish_mqtt "$disc_topic" "$disc_payload"
 }
 
