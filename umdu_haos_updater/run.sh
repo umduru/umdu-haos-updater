@@ -287,8 +287,15 @@ install_update_file() {
         return 1
     fi
     
-    # RAUC видит /share напрямую, передаём исходный путь
-    local host_update_file="${update_file}"
+    # RAUC видит bundle в /mnt/data/supervisor/share
+    local host_update_file="/mnt/data/supervisor/share${update_file#/share}"
+
+    if [[ ! -f "${host_update_file}" ]]; then
+        echo "[ERROR] Бандл не найден для RAUC: ${host_update_file}"
+        return 1
+    fi
+
+    log_debug "RAUC cmd: rauc install ${host_update_file}"
     
     echo "[INFO] Начинаем установку обновления..."
     echo "[INFO] Файл: ${host_update_file}"
