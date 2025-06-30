@@ -354,8 +354,8 @@ install_update_file() {
     # RAUC видит bundle в /mnt/data/supervisor/share
     local host_update_file="/mnt/data/supervisor/share${update_file#/share}"
 
-    if [[ ! -f "${host_update_file}" ]]; then
-        echo "[ERROR] Бандл не найден для RAUC: ${host_update_file}"
+    if [[ ! -f "${update_file}" ]]; then
+        echo "[ERROR] Бандл не найден в контейнере по пути: ${update_file}"
         return 1
     fi
 
