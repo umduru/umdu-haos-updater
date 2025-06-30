@@ -65,6 +65,9 @@ fi
 
 # Global constants
 SHARE_DIR="/share/umdu-haos-updater"
+REBOOT_REQUIRED_FILE="/data/reboot_required"
+MQTT_REBOOT_CMD_TOPIC="umdu/haos_updater/reboot/cmd"
+MQTT_REBOOT_AVAIL_TOPIC="umdu/haos_updater/reboot/availability"
 
 # Переменная для хранения последней доступной версии
 LAST_AVAILABLE_VERSION=""
@@ -90,9 +93,41 @@ publish_discovery() {
     publish_mqtt "$disc_topic" "$disc_payload"
 }
 
+publish_reboot_button() {
+    if [[ "$MQTT_DISCOVERY" != "true" ]]; then return; fi
+    local availability="$1" # "online" or "offline"
+
+    # Публикуем конфигурацию для автообнаружения кнопки (только один раз)
+    if ! grep -q "Reboot button discovery published" /tmp/discovery.log 2>/dev/null; then
+        local disc_topic="homeassistant/button/umdu_haos_k1_reboot/config"
+        local disc_payload
+        disc_payload=$(cat <<EOF
+{
+  "name": "Reboot UMDU K1",
+  "uniq_id": "umdu_haos_k1_reboot",
+  "cmd_t": "${MQTT_REBOOT_CMD_TOPIC}",
+  "payload_press": "REBOOT",
+  "avty_t": "${MQTT_REBOOT_AVAIL_TOPIC}",
+  "ent_cat": "config",
+  "ic": "mdi:restart"
+}
+EOF
+)
+        publish_mqtt "$disc_topic" "$disc_payload"
+        echo "Reboot button discovery published" >> /tmp/discovery.log
+    fi
+
+    # Публикуем доступность кнопки
+    publish_mqtt "$MQTT_REBOOT_AVAIL_TOPIC" "$availability"
+}
+
 publish_state() {
     local installed="$1"; local latest="$2"
-    local state_payload="{\"installed_version\":\"$installed\",\"latest_version\":\"$latest\"}"
+    local reboot_required="false"
+    if [[ -f "$REBOOT_REQUIRED_FILE" ]]; then
+        reboot_required="true"
+    fi
+    local state_payload="{\"installed_version\":\"$installed\",\"latest_version\":\"$latest\",\"reboot_required\":${reboot_required}}"
     publish_mqtt "umdu/haos_updater/state" "$state_payload"
 }
 
@@ -126,6 +161,34 @@ handle_mqtt_commands() {
         echo "[ERROR] Ошибка подключения для mosquitto_sub:"; cat /tmp/mqtt_sub_err.log
         MQTT_DISCOVERY="false"
     fi
+}
+
+handle_reboot_command() {
+    if [[ "$MQTT_DISCOVERY" != "true" ]]; then return; fi
+
+    echo "[INFO] Ожидание MQTT-команды перезагрузки на ${MQTT_REBOOT_CMD_TOPIC}..."
+    mosquitto_sub -h "$MQTT_HOST" -p "$MQTT_PORT" \
+        ${MQTT_USER:+-u "$MQTT_USER"} ${MQTT_PASSWORD:+-P "$MQTT_PASSWORD"} \
+        -t "${MQTT_REBOOT_CMD_TOPIC}" |
+    while read -r cmd; do
+        log_debug "MQTT reboot cmd recv: $cmd"
+        if [[ "$cmd" == "REBOOT" ]]; then
+            if [[ -f "$REBOOT_REQUIRED_FILE" ]]; then
+                echo "[INFO] Получена команда перезагрузки через MQTT. Перезагружаемся..."
+                send_notification "UMDU HAOS Rebooting" "Система перезагружается для применения обновления."
+
+                # Делаем кнопку недоступной и удаляем файл состояния
+                publish_reboot_button "offline"
+                rm -f "$REBOOT_REQUIRED_FILE"
+
+                # Перезагрузка хоста
+                sleep 5
+                curl -X POST -H "Authorization: Bearer $SUPERVISOR_TOKEN" "http://supervisor/host/reboot"
+            else
+                echo "[WARNING] Получена команда перезагрузки, но перезагрузка не требуется."
+            fi
+        fi
+    done &
 }
 
 # Функция проверки доступности supervisor API
@@ -268,7 +331,8 @@ download_update_file() {
     # --retry-delay 5 : пауза 5 сек
     if curl -# -L --fail --retry 3 --retry-delay 5 -o "${download_path}" "${update_url}"; then
         echo "[INFO] Файл обновления загружен: ${download_path}" >&2
-        # Копирование не требуется
+        # Возвращаем путь к файлу через stdout, используя `command echo` чтобы обойти alias
+        command echo "${download_path}"
         return 0
     else
         echo "[ERROR] Не удалось загрузить файл обновления" >&2
@@ -335,17 +399,25 @@ install_update_file() {
     
     # Обработка результата
     if [[ "${install_success}" == "true" ]]; then
-        echo "[INFO] Система будет перезагружена для применения обновления..."
+        echo "[INFO] Обновление установлено. Требуется перезагрузка."
         
-        # Отправка уведомления об успешной установке
+        # Создаем флаг о необходимости перезагрузки
+        touch "$REBOOT_REQUIRED_FILE"
+
+        # Делаем кнопку перезагрузки доступной
+        publish_reboot_button "online"
+
+        # Отправка уведомления о необходимости перезагрузки
         send_notification \
             "UMDU HAOS Обновление установлено" \
-            "Обновление Home Assistant OS успешно установлено. Система перезагружается..."
+            "Обновление Home Assistant OS успешно установлено. Требуется перезагрузка для его применения. Нажмите кнопку 'Reboot UMDU K1'."
         
-        # Перезагрузка системы через Supervisor API
-        sleep 5
-        curl -X POST -H "Authorization: Bearer $SUPERVISOR_TOKEN" \
-             "http://supervisor/host/reboot"
+        # Обновляем состояние, чтобы в UI появился флаг reboot_required
+        # Получаем текущую и последнюю версии, т.к. они недоступны в этой функции
+        local current_version
+        current_version=$(get_current_haos_version)
+        publish_state "$current_version" "$LAST_AVAILABLE_VERSION"
+
         return 0
     else
         echo "[ERROR] Установка обновления не удалась"
@@ -424,7 +496,15 @@ fi
 
 # Инициализируем discovery и слушаем команды (после всех фоллбэков)
 publish_discovery
+publish_reboot_button "offline" # По умолчанию кнопка недоступна
 handle_mqtt_commands
+handle_reboot_command
+
+# При старте проверяем, не остался ли флаг перезагрузки с прошлого раза
+if [[ -f "$REBOOT_REQUIRED_FILE" ]]; then
+    echo "[INFO] Обнаружен флаг перезагрузки. Делаем кнопку доступной."
+    publish_reboot_button "online"
+fi
 
 # Основной цикл работы
 while true; do
