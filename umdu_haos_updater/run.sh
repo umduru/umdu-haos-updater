@@ -4,6 +4,16 @@
 set -u
 set -o pipefail
 
+# --- WORKAROUND for rauc client path check ---
+# Создаем в контейнере структуру папок, идентичную хосту,
+# и ссылаемся на реальную директорию /share, чтобы rauc install мог найти файл.
+if [[ ! -d /mnt/data/supervisor/share ]]; then
+    echo "[INFO] Создание символической ссылки /mnt/data/supervisor/share -> /share для совместимости с rauc..."
+    mkdir -p /mnt/data/supervisor
+    ln -s /share /mnt/data/supervisor/share
+fi
+# --- END WORKAROUND ---
+
 # Включаем алиасы внутри скрипта и добавляем метку времени ко всем echo
 shopt -s expand_aliases
 alias echo='builtin echo "$(date "+%Y-%m-%d %H:%M:%S")"'
@@ -64,7 +74,7 @@ if [[ "$MQTT_DISCOVERY" == "true" && ! $(command -v mosquitto_pub) ]]; then
 fi
 
 # Global constants
-SHARE_DIR="/share/umdu-haos-updater"
+SHARE_DIR="/mnt/data/supervisor/share/umdu-haos-updater"
 REBOOT_REQUIRED_FILE="/data/reboot_required"
 MQTT_REBOOT_CMD_TOPIC="umdu/haos_updater/reboot/cmd"
 MQTT_REBOOT_AVAIL_TOPIC="umdu/haos_updater/reboot/availability"
@@ -351,11 +361,11 @@ install_update_file() {
         return 1
     fi
     
-    # RAUC видит bundle в /mnt/data/supervisor/share
-    local host_update_file="/mnt/data/supervisor/share${update_file#/share}"
+    # Путь для RAUC и путь в контейнере теперь совпадают
+    local host_update_file="${update_file}"
 
-    if [[ ! -f "${update_file}" ]]; then
-        echo "[ERROR] Бандл не найден в контейнере по пути: ${update_file}"
+    if [[ ! -f "${host_update_file}" ]]; then
+        echo "[ERROR] Бандл не найден в контейнере по пути: ${host_update_file}"
         return 1
     fi
 
