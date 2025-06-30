@@ -112,11 +112,9 @@ handle_mqtt_commands() {
                 continue
             fi
             echo "[INFO] Получена команда install через MQTT; версия к установке: $avail_ver"
-            if update_file_path=$(download_update_file "$avail_ver"); then
-                install_update_file "$update_file_path"
-            else
-                echo "[ERROR] Не удалось загрузить файл обновления после команды install"
-            fi
+            update_file_path=$(download_update_file "$avail_ver")
+            log_debug "download_update_file returned: '$update_file_path'"
+            install_update_file "$update_file_path"
         else
             echo "[WARNING] Неизвестная команда через MQTT: $cmd"
         fi
@@ -282,8 +280,10 @@ download_update_file() {
 install_update_file() {
     local update_file="$1"
     
-    if [[ ! -f "${update_file}" ]]; then
-        echo "[ERROR] Файл обновления не найден: ${update_file}"
+    echo "[DEBUG] install_update_file argv: '$update_file'"
+
+    if [[ -z "${update_file}" ]]; then
+        echo "[ERROR] Пустой путь передан в install_update_file"
         return 1
     fi
     
