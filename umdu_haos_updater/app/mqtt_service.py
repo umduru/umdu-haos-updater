@@ -4,6 +4,7 @@ import json
 import logging
 import threading
 from typing import Callable, Optional
+import time
 
 import paho.mqtt.client as mqtt
 
@@ -132,6 +133,9 @@ class MqttService:
         
         logger.info("MQTT: connected")
 
+        # Небольшая задержка для стабилизации соединения
+        time.sleep(0.5)
+
         # Подписка на команды
         client.subscribe(COMMAND_TOPIC)
 
@@ -194,7 +198,7 @@ class MqttService:
             logger.warning("MQTT: попытка публикации при отсутствии подключения")
             return
         result = self._client.publish(topic, payload, retain=True)
-        if not result.is_published():
+        if result.rc != 0:  # MQTT_ERR_SUCCESS = 0
             logger.warning("MQTT: ошибка публикации в %s: %s", topic, result.rc)
         else:
             logger.debug("MQTT: успешная публикация в %s", topic) 
