@@ -87,12 +87,22 @@ class UpdateOrchestrator:
             _LOGGER.debug("in_progress=True – пропуск auto_cycle_once")
             return
 
+        # Получаем информацию об обновлении
+        try:
+            avail = fetch_available_update()
+            self._latest_version = avail.version
+        except Exception:
+            # При ошибке используем кэш или installed
+            if not self._latest_version:
+                self._latest_version = get_current_haos_version() or "unknown"
+
+        # Проверяем и скачиваем обновление
         bundle_path = self.check_and_download()
         if bundle_path and self._cfg.auto_update:
             _LOGGER.info("Auto-installing %s", bundle_path)
             self.run_install(bundle_path)
         else:
-            # Публикуем текущее состояние только если нет установки
+            # Публикуем текущее состояние с найденной версией
             self.publish_state()
 
     # ---------------------------------------------------------------------
