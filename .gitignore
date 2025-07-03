@@ -24,6 +24,21 @@ Thumbs.db
 # Docker
 .dockerignore
 
-# Development
-test/
+# Development artifacts
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.*
+*.coverage
+*.cov
+*.cover
+
+
+# Logs & debug
 debug/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
