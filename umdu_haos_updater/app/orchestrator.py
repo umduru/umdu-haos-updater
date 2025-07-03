@@ -44,16 +44,21 @@ class UpdateOrchestrator:
         # Если версия явно передана - обновляем кэш
         if latest is not None:
             self._latest_version = latest
+            _LOGGER.debug("Orchestrator: установлена latest_version=%s", latest)
         # Иначе пытаемся получить новую версию
         else:
             try:
                 avail = fetch_available_update()
                 self._latest_version = avail.version
+                _LOGGER.debug("Orchestrator: получена latest_version=%s", self._latest_version)
             except Exception:
                 # При ошибке используем кэш или installed
                 if not self._latest_version:
                     self._latest_version = installed
+                _LOGGER.debug("Orchestrator: используем кэш latest_version=%s", self._latest_version)
 
+        _LOGGER.debug("Orchestrator: публикуем состояние installed=%s, latest=%s, in_progress=%s", 
+                     installed, self._latest_version, self._in_progress)
         self._mqtt_service.publish_update_state(installed, self._latest_version, self._in_progress)
 
     # ---------------------------------------------------------------------
@@ -91,10 +96,12 @@ class UpdateOrchestrator:
         try:
             avail = fetch_available_update()
             self._latest_version = avail.version
+            _LOGGER.debug("Orchestrator: auto_cycle_once получил latest_version=%s", self._latest_version)
         except Exception:
             # При ошибке используем кэш или installed
             if not self._latest_version:
                 self._latest_version = get_current_haos_version() or "unknown"
+            _LOGGER.debug("Orchestrator: auto_cycle_once использует кэш latest_version=%s", self._latest_version)
 
         # Проверяем и скачиваем обновление
         bundle_path = self.check_and_download()
@@ -103,6 +110,7 @@ class UpdateOrchestrator:
             self.run_install(bundle_path)
         else:
             # Публикуем текущее состояние с найденной версией
+            _LOGGER.debug("Orchestrator: auto_cycle_once публикует состояние")
             self.publish_state()
 
     # ---------------------------------------------------------------------
