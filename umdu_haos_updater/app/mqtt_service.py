@@ -191,7 +191,13 @@ class MqttService:
                 "payload_install": "install",
                 "availability_topic": UPDATE_AVAIL_TOPIC,
                 "device_class": "firmware",
-                "platform": "update"
+                "platform": "update",
+                # Шаблоны для разбора JSON состояния
+                "latest_version_template": "{{ value_json.latest_version }}",
+                "installed_version_template": "{{ value_json.installed_version }}",
+                # Важно! Шаблон для определения состояния установки
+                "state_template": "{% if value_json.in_progress %}installing{% elif value_json.latest_version != value_json.installed_version %}available{% else %}idle{% endif %}",
+                "json_attributes_topic": STATE_TOPIC
             }
             self._publish(UPDATE_DISC_TOPIC, json.dumps(update_config))
 
@@ -220,10 +226,17 @@ class MqttService:
         # Добавляем небольшую задержку для стабильности
         time.sleep(0.1)
         
+        # Логируем перед отправкой
+        logger.info("MQTT: ОТПРАВКА state сообщения: %s", payload)
+        
         result = self._client.publish(topic, payload, retain=False, qos=1)
         if result.rc != 0:  # MQTT_ERR_SUCCESS = 0
             logger.warning("MQTT: ошибка публикации состояния в %s: %s", topic, result.rc)
         else:
             logger.debug("MQTT: успешная публикация состояния в %s", topic)
             # Ждем подтверждения доставки
-            result.wait_for_publish(timeout=2.0) 
+            try:
+                result.wait_for_publish(timeout=2.0)
+                logger.info("MQTT: ПОДТВЕРЖДЕНИЕ доставки state сообщения")
+            except Exception as e:
+                logger.warning("MQTT: нет подтверждения доставки: %s", e) 

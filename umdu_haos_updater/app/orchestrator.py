@@ -64,10 +64,25 @@ class UpdateOrchestrator:
         
         # Публикуем состояние с дополнительной проверкой
         try:
+            # Генерируем уникальный ID для отслеживания
+            import uuid
+            msg_id = str(uuid.uuid4())[:8]
+            
             self._mqtt_service.publish_update_state(installed, self._latest_version, self._in_progress)
+            # Логируем точное содержимое для отладки
+            import json
+            payload = {
+                "installed_version": installed,
+                "latest_version": self._latest_version,
+                "in_progress": self._in_progress
+            }
+            _LOGGER.info("Orchestrator [%s]: отправлено MQTT состояние: %s", msg_id, json.dumps(payload))
+            
             # Небольшая задержка для обеспечения доставки
             import time
-            time.sleep(0.2)
+            time.sleep(0.5)  # Увеличиваем задержку для тестирования
+            _LOGGER.info("Orchestrator [%s]: задержка завершена", msg_id)
+                
         except Exception as e:
             _LOGGER.warning("Ошибка публикации состояния MQTT: %s", e)
 
@@ -132,16 +147,21 @@ class UpdateOrchestrator:
         latest_version: str | None = None,
     ) -> None:
         """Запускает RAUC-установку и публикует MQTT-индикатор."""
+        _LOGGER.info("RUN_INSTALL: начало установки, устанавливаем in_progress=True")
         self._in_progress = True
         self.publish_state(latest=latest_version)
 
+        _LOGGER.info("RUN_INSTALL: вызов install_if_ready")
         success = self.install_if_ready(bundle_path)
 
+        _LOGGER.info("RUN_INSTALL: установка завершена, success=%s, устанавливаем in_progress=False", success)
         self._in_progress = False
         if self._mqtt_service:
             if success:
+                _LOGGER.info("RUN_INSTALL: успех - деактивируем entity")
                 self._mqtt_service.deactivate_update_entity()
             else:
+                _LOGGER.info("RUN_INSTALL: ошибка - публикуем состояние")
                 self.publish_state(latest=latest_version)
 
         if success:
@@ -153,6 +173,34 @@ class UpdateOrchestrator:
     # ---------------------------------------------------------------------
     # Internal helpers
     # ---------------------------------------------------------------------
+    def _send_via_mosquitto_pub(self, installed: str, latest: str, in_progress: bool) -> None:
+        """Экспериментальный метод отправки через mosquitto_pub для отладки."""
+        import subprocess
+        import json
+        
+        payload = {
+            "installed_version": installed,
+            "latest_version": latest,
+            "in_progress": in_progress
+        }
+        
+        try:
+            # Пытаемся отправить через mosquitto_pub
+            cmd = [
+                "mosquitto_pub",
+                "-h", "core-mosquitto",
+                "-t", "umdu/haos_updater/state",
+                "-m", json.dumps(payload),
+                "-q", "1"
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                _LOGGER.info("mosquitto_pub: успешная отправка")
+            else:
+                _LOGGER.warning("mosquitto_pub failed: %s", result.stderr)
+        except Exception as e:
+            _LOGGER.warning("mosquitto_pub exception: %s", e)
+
     @staticmethod
     def _touch_reboot_flag() -> None:
         Path("/data/reboot_required").touch(exist_ok=True) 

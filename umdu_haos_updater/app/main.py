@@ -73,10 +73,12 @@ def handle_install_cmd(cfg: AddonConfig, orchestrator: UpdateOrchestrator, mqtt_
     bundle_path = check_for_update_and_download(auto_download=True)
     if not bundle_path:
         logger.error("Не удалось получить RAUC-бандл, установка отменена")
+        logger.info("MAIN: вызов orchestrator.publish_state при ошибке bundle")
         orchestrator.publish_state(latest=latest_version)
         return
 
     # Унифицированная установка через orchestrator
+    logger.info("MAIN: вызов orchestrator.run_install с bundle_path=%s", bundle_path)
     orchestrator.run_install(bundle_path, latest_version)
 
 
