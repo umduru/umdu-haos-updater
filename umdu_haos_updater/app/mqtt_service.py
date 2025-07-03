@@ -190,4 +190,11 @@ class MqttService:
     def _publish(self, topic: str, payload: str):
         """Внутренний метод для публикации с логированием."""
         logger.debug("MQTT publish %s %s", topic, payload[:120])
-        self._client.publish(topic, payload, retain=True) 
+        if not self._connected:
+            logger.warning("MQTT: попытка публикации при отсутствии подключения")
+            return
+        result = self._client.publish(topic, payload, retain=True)
+        if not result.is_published():
+            logger.warning("MQTT: ошибка публикации в %s: %s", topic, result.rc)
+        else:
+            logger.debug("MQTT: успешная публикация в %s", topic) 
