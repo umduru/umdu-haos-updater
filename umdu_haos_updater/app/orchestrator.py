@@ -61,7 +61,15 @@ class UpdateOrchestrator:
 
         _LOGGER.debug("Orchestrator: публикуем состояние installed=%s, latest=%s, in_progress=%s", 
                      installed, self._latest_version, self._in_progress)
-        self._mqtt_service.publish_update_state(installed, self._latest_version, self._in_progress)
+        
+        # Публикуем состояние с дополнительной проверкой
+        try:
+            self._mqtt_service.publish_update_state(installed, self._latest_version, self._in_progress)
+            # Небольшая задержка для обеспечения доставки
+            import time
+            time.sleep(0.2)
+        except Exception as e:
+            _LOGGER.warning("Ошибка публикации состояния MQTT: %s", e)
 
     # ---------------------------------------------------------------------
     # Public API

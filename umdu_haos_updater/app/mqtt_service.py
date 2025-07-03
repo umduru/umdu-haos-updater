@@ -38,6 +38,10 @@ class MqttService:
         self.on_install_cmd = on_install_cmd
 
         self._client = mqtt.Client(client_id="umdu_haos_updater", clean_session=True)
+        
+        # Настройка автоматического переподключения
+        self._client.reconnect_delay_set(min_delay=1, max_delay=30)
+        
         if username:
             self._client.username_pw_set(username, password or "")
 
@@ -60,11 +64,13 @@ class MqttService:
         """Запускает MQTT клиент."""
         logger.info("MQTT: connecting to %s:%s", self.host, self.port)
         try:
+            # Включаем автоматическое переподключение
+            self._client.enable_logger(logger)
             self._client.connect(self.host, self.port, 60)
+            self._client.loop_start()
         except Exception as exc:
             logger.warning("MQTT: connection error: %s", exc)
             return
-        self._client.loop_start()
 
     def _is_ready(self) -> bool:
         """Проверяет готовность к публикации."""
@@ -84,7 +90,8 @@ class MqttService:
             "in_progress": in_progress
         }
         
-        self._publish(STATE_TOPIC, json.dumps(payload))
+        # State сообщения НЕ должны быть retained - они отражают текущее состояние
+        self._publish_state(STATE_TOPIC, json.dumps(payload))
 
     def publish_update_availability(self, online: bool) -> None:
         """Публикует доступность update entity."""
@@ -192,8 +199,8 @@ class MqttService:
     # Internal Helpers
     # ---------------------------------------------------------------------
     def _publish(self, topic: str, payload: str):
-        """Внутренний метод для публикации с логированием."""
-        logger.debug("MQTT publish %s %s", topic, payload[:120])
+        """Внутренний метод для публикации с retain=True (для discovery и availability)."""
+        logger.debug("MQTT publish (retained) %s %s", topic, payload[:120])
         if not self._connected:
             logger.warning("MQTT: попытка публикации при отсутствии подключения")
             return
@@ -201,4 +208,22 @@ class MqttService:
         if result.rc != 0:  # MQTT_ERR_SUCCESS = 0
             logger.warning("MQTT: ошибка публикации в %s: %s", topic, result.rc)
         else:
-            logger.debug("MQTT: успешная публикация в %s", topic) 
+            logger.debug("MQTT: успешная публикация в %s", topic)
+
+    def _publish_state(self, topic: str, payload: str):
+        """Внутренний метод для публикации state сообщений без retain."""
+        logger.debug("MQTT publish (state) %s %s", topic, payload[:120])
+        if not self._connected:
+            logger.warning("MQTT: попытка публикации состояния при отсутствии подключения")
+            return
+        
+        # Добавляем небольшую задержку для стабильности
+        time.sleep(0.1)
+        
+        result = self._client.publish(topic, payload, retain=False, qos=1)
+        if result.rc != 0:  # MQTT_ERR_SUCCESS = 0
+            logger.warning("MQTT: ошибка публикации состояния в %s: %s", topic, result.rc)
+        else:
+            logger.debug("MQTT: успешная публикация состояния в %s", topic)
+            # Ждем подтверждения доставки
+            result.wait_for_publish(timeout=2.0) 
