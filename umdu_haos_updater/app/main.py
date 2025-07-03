@@ -140,7 +140,7 @@ async def main() -> None:
     if mqtt_service:
         await asyncio.sleep(2)  # Ждем подключения
         mqtt_service.clear_retained_messages()  # Очищаем после подключения
-        orchestrator.publish_state()  # Публикуем начальное состояние
+        # НЕ публикуем состояние здесь - это сделает первый auto_cycle_once()
 
     while True:
         # Полный цикл обновления выполняем в пуле потоков, чтобы не
@@ -158,7 +158,7 @@ async def main() -> None:
                 mqtt_service.on_install_cmd = lambda: handle_install_cmd(cfg, orchestrator)
                 await asyncio.sleep(2)
                 mqtt_service.clear_retained_messages()
-                orchestrator.publish_state()
+                # Состояние опубликует следующий auto_cycle_once()
 
         await asyncio.sleep(cfg.update_check_interval)
 

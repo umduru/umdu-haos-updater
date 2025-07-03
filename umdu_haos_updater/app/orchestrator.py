@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable
 
 from .config import AddonConfig
-from .updater import check_for_update_and_download
+from .updater import check_for_update_and_download, fetch_available_update
 from .rauc_installer import install_bundle, InstallError
 from .notification_service import NotificationService, reboot_required_message
 from .supervisor_api import get_current_haos_version
@@ -45,17 +45,19 @@ class UpdateOrchestrator:
         if latest is not None:
             self._latest_version = latest
             _LOGGER.debug("Orchestrator: установлена latest_version=%s", latest)
-        # Иначе пытаемся получить новую версию
+        # Если не передана, но есть в кэше - используем кэш
+        elif self._latest_version is not None:
+            _LOGGER.debug("Orchestrator: используем кэш latest_version=%s", self._latest_version)
+        # Только если кэш пуст - пытаемся получить новую версию
         else:
             try:
                 avail = fetch_available_update()
                 self._latest_version = avail.version
                 _LOGGER.debug("Orchestrator: получена latest_version=%s", self._latest_version)
             except Exception:
-                # При ошибке используем кэш или installed
-                if not self._latest_version:
-                    self._latest_version = installed
-                _LOGGER.debug("Orchestrator: используем кэш latest_version=%s", self._latest_version)
+                # При ошибке используем installed как fallback
+                self._latest_version = installed
+                _LOGGER.debug("Orchestrator: fallback latest_version=%s", self._latest_version)
 
         _LOGGER.debug("Orchestrator: публикуем состояние installed=%s, latest=%s, in_progress=%s", 
                      installed, self._latest_version, self._in_progress)
