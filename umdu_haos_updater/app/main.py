@@ -60,35 +60,24 @@ def handle_install_cmd(cfg: AddonConfig, orchestrator: UpdateOrchestrator, mqtt_
         logger.error("Orchestrator not provided for install command")
         return
 
-    orchestrator.manual_install_active = True
-
-    current_version = get_current_haos_version() or "unknown"
-
     # Пытаемся получить сведения об актуальной версии (необязательно)
     try:
         _info = fetch_available_update()
         latest_version = _info.version
     except Exception as exc:  # noqa: BLE001
         logger.debug("fetch_available_update failed: %s", exc)
-        latest_version = current_version
+        latest_version = None
 
     logger.info("MQTT install: установка версии %s", latest_version)
-
-    if mqtt_service:
-        mqtt_service.publish_update_state(current_version, latest_version, in_progress=True)
 
     bundle_path = check_for_update_and_download(auto_download=True)
     if not bundle_path:
         logger.error("Не удалось получить RAUC-бандл, установка отменена")
-        if mqtt_service:
-            mqtt_service.publish_update_state(current_version, latest_version, in_progress=False)
-            mqtt_service.publish_update_availability(True)
-        orchestrator.manual_install_active = False
+        orchestrator.publish_state(latest=latest_version)
         return
 
     # Унифицированная установка через orchestrator
-    orchestrator.run_install(bundle_path, mqtt_service, latest_version)
-    orchestrator.manual_install_active = False
+    orchestrator.run_install(bundle_path, latest_version)
 
 
 async def try_initialize_mqtt(cfg: AddonConfig, loop: asyncio.AbstractEventLoop) -> MqttService | None:
@@ -141,27 +130,17 @@ async def main() -> None:
     # Notification service & orchestrator
     notifier = NotificationService(enabled=cfg.notifications)
     orchestrator = UpdateOrchestrator(cfg, notifier)
+    orchestrator.set_mqtt_service(mqtt_service)
 
     # Устанавливаем обработчик после создания orchestrator
     if mqtt_service:
-        mqtt_service.on_install_cmd = lambda: handle_install_cmd(cfg, orchestrator, mqtt_service)
+        mqtt_service.on_install_cmd = lambda: handle_install_cmd(cfg, orchestrator)
 
     # Инициализация MQTT состояния при старте
     if mqtt_service:
         await asyncio.sleep(2)  # Ждем подключения
         mqtt_service.clear_retained_messages()  # Очищаем после подключения
-        
-        # Получаем текущие версии (блокирующий HTTP) в пуле потоков
-        try:
-            available = await loop.run_in_executor(None, fetch_available_update)
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("Initial fetch_available_update failed: %s", exc)
-            available = None
-        installed = await loop.run_in_executor(None, get_current_haos_version) or "unknown"
-        
-        # Публикуем начальное состояние
-        latest_version = available.version if available else installed
-        mqtt_service.publish_update_state(installed, latest_version)
+        orchestrator.publish_state()  # Публикуем начальное состояние
 
     while True:
         # Полный цикл обновления выполняем в пуле потоков, чтобы не
@@ -175,24 +154,11 @@ async def main() -> None:
             if mqtt_service:
                 logger.info("MQTT успешно переподключен.")
                 # Настраиваем новый инстанс
-                mqtt_service.on_install_cmd = lambda: handle_install_cmd(cfg, orchestrator, mqtt_service)
+                orchestrator.set_mqtt_service(mqtt_service)
+                mqtt_service.on_install_cmd = lambda: handle_install_cmd(cfg, orchestrator)
                 await asyncio.sleep(2)
                 mqtt_service.clear_retained_messages()
-
-        # Получаем актуальную информацию для MQTT
-        try:
-            avail = await loop.run_in_executor(None, fetch_available_update)
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("fetch_available_update failed: %s", exc)
-            avail = None
-
-        # Публикация состояния MQTT
-        if mqtt_service:
-            installed = await loop.run_in_executor(None, get_current_haos_version) or "unknown"
-            
-            # Публикуем обновление state без in_progress
-            latest_version = avail.version if avail else installed
-            mqtt_service.publish_update_state(installed, latest_version)
+                orchestrator.publish_state()
 
         await asyncio.sleep(cfg.update_check_interval)
 

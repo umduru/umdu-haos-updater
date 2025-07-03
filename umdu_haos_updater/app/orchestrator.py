@@ -22,9 +22,31 @@ class UpdateOrchestrator:
     def __init__(self, cfg: AddonConfig, notifier: NotificationService | None = None) -> None:
         self._cfg = cfg
         self._notifier = notifier or NotificationService(enabled=cfg.notifications)
+        self._mqtt_service: MqttService | None = None
+        self._in_progress: bool = False
         # Когда true — цикл auto_update временно приостанавливается, т.к.
         # ручная установка already выполняется в другом потоке.
         self.manual_install_active: bool = False
+
+    def set_mqtt_service(self, mqtt_service: MqttService | None) -> None:
+        """Устанавливает MQTT сервис для публикации состояния."""
+        self._mqtt_service = mqtt_service
+
+    def publish_state(self, installed: str | None = None, latest: str | None = None) -> None:
+        """Публикует текущее состояние в MQTT."""
+        if not self._mqtt_service:
+            return
+
+        if installed is None:
+            installed = get_current_haos_version() or "unknown"
+        if latest is None:
+            try:
+                avail = fetch_available_update()
+                latest = avail.version
+            except Exception:
+                latest = installed
+
+        self._mqtt_service.publish_update_state(installed, latest, self._in_progress)
 
     # ---------------------------------------------------------------------
     # Public API
@@ -53,47 +75,43 @@ class UpdateOrchestrator:
 
     def auto_cycle_once(self) -> None:
         """Single iteration of auto-update loop (non-blocking)."""
-        if self.manual_install_active:
-            _LOGGER.debug("manual_install_active=True – пропуск auto_cycle_once")
+        if self._in_progress:
+            _LOGGER.debug("in_progress=True – пропуск auto_cycle_once")
             return
 
         bundle_path = self.check_and_download()
         if bundle_path and self._cfg.auto_update:
             _LOGGER.info("Auto-installing %s", bundle_path)
             self.run_install(bundle_path)
+        else:
+            # Публикуем текущее состояние только если нет установки
+            self.publish_state()
 
     # ---------------------------------------------------------------------
     # Unified install flow
     # ---------------------------------------------------------------------
-
     def run_install(
         self,
         bundle_path: Path,
-        mqtt_service: MqttService | None = None,
         latest_version: str | None = None,
     ) -> None:
-        """Запускает RAUC-установку и публикует MQTT-индикатор.
-
-        Используется и в авто-режиме, и в ручном install.
-        """
-
-        installed_version = get_current_haos_version() or "unknown"
-        target_version = latest_version or installed_version
-
-        if mqtt_service:
-            mqtt_service.publish_update_state(installed_version, target_version, in_progress=True)
+        """Запускает RAUC-установку и публикует MQTT-индикатор."""
+        self._in_progress = True
+        self.publish_state(latest=latest_version)
 
         success = self.install_if_ready(bundle_path)
 
-        if mqtt_service:
-            mqtt_service.publish_update_state(installed_version, target_version, in_progress=False)
+        self._in_progress = False
+        if self._mqtt_service:
             if success:
-                mqtt_service.deactivate_update_entity()
+                self._mqtt_service.deactivate_update_entity()
+            else:
+                self.publish_state(latest=latest_version)
 
         if success:
             self._notifier.send(
                 "UMDU HAOS Update Installed",
-                reboot_required_message(target_version),
+                reboot_required_message(latest_version),
             )
 
     # ---------------------------------------------------------------------
