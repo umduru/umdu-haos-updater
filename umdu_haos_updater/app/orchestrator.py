@@ -148,6 +148,14 @@ class UpdateOrchestrator:
     ) -> None:
         """Запускает RAUC-установку и публикует MQTT-индикатор."""
         _LOGGER.info("RUN_INSTALL: начало установки, устанавливаем in_progress=True")
+        
+        # ЭКСПЕРИМЕНТАЛЬНЫЙ ФИКС: принудительно обновляем discovery перед установкой
+        if self._mqtt_service:
+            _LOGGER.info("RUN_INSTALL: принудительное обновление discovery конфигурации")
+            self._mqtt_service._publish_discovery()
+            import time
+            time.sleep(1)  # Ждем обработки discovery
+        
         self._in_progress = True
         self.publish_state(latest=latest_version)
 

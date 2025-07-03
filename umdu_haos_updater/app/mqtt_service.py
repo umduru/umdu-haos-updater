@@ -186,19 +186,30 @@ class MqttService:
             update_config = {
                 "name": "Home Assistant OS for UMDU K1",
                 "unique_id": "umdu_haos_k1_os",
+                "object_id": "umdu_haos_k1_os",  # Добавляем явный object_id
                 "state_topic": STATE_TOPIC,
                 "command_topic": COMMAND_TOPIC,
                 "payload_install": "install",
                 "availability_topic": UPDATE_AVAIL_TOPIC,
                 "device_class": "firmware",
-                "platform": "update",
-                # Шаблоны для разбора JSON состояния
+                # Упрощаем - убираем шаблоны, используем прямые поля
+                "latest_version_topic": STATE_TOPIC,
                 "latest_version_template": "{{ value_json.latest_version }}",
+                "installed_version_topic": STATE_TOPIC, 
                 "installed_version_template": "{{ value_json.installed_version }}",
-                # Важно! Шаблон для определения состояния установки
-                "state_template": "{% if value_json.in_progress %}installing{% elif value_json.latest_version != value_json.installed_version %}available{% else %}idle{% endif %}",
-                "json_attributes_topic": STATE_TOPIC
+                # Основное состояние entity
+                "state_topic": STATE_TOPIC,
+                "value_template": "{% if value_json.in_progress %}installing{% elif value_json.latest_version != value_json.installed_version %}available{% else %}idle{% endif %}",
+                "json_attributes_topic": STATE_TOPIC,
+                # Устройство
+                "device": {
+                    "identifiers": ["umdu_k1"],
+                    "name": "UMDU K1",
+                    "model": "UMDU K1",
+                    "manufacturer": "UMDU"
+                }
             }
+            logger.info("MQTT: публикуем обновленную discovery конфигурацию")
             self._publish(UPDATE_DISC_TOPIC, json.dumps(update_config))
 
     # ---------------------------------------------------------------------
