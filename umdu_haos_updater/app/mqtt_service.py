@@ -37,7 +37,7 @@ class MqttService:
         self.discovery_enabled = discovery
         self.on_install_cmd = on_install_cmd
 
-        self._client = mqtt.Client()
+        self._client = mqtt.Client(client_id="umdu_haos_updater", clean_session=True)
         if username:
             self._client.username_pw_set(username, password or "")
 
