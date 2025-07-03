@@ -159,6 +159,12 @@ class UpdateOrchestrator:
         self._in_progress = True
         self.publish_state(latest=latest_version)
 
+        # Добавляем паузу для отображения прогресса в Home Assistant
+        # Это необходимо, чтобы HA успел обработать in_progress=True и показать спиннер
+        _LOGGER.info("RUN_INSTALL: пауза для отображения прогресса (3 сек)")
+        import time
+        time.sleep(3)
+
         _LOGGER.info("RUN_INSTALL: вызов install_if_ready")
         success = self.install_if_ready(bundle_path)
 
