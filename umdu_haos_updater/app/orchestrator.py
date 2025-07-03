@@ -24,6 +24,7 @@ class UpdateOrchestrator:
         self._notifier = notifier or NotificationService(enabled=cfg.notifications)
         self._mqtt_service: MqttService | None = None
         self._in_progress: bool = False
+        self._latest_version: str | None = None  # Кэш последней известной версии
         # Когда true — цикл auto_update временно приостанавливается, т.к.
         # ручная установка already выполняется в другом потоке.
         self.manual_install_active: bool = False
@@ -39,14 +40,21 @@ class UpdateOrchestrator:
 
         if installed is None:
             installed = get_current_haos_version() or "unknown"
-        if latest is None:
+        
+        # Если версия явно передана - обновляем кэш
+        if latest is not None:
+            self._latest_version = latest
+        # Иначе пытаемся получить новую версию
+        else:
             try:
                 avail = fetch_available_update()
-                latest = avail.version
+                self._latest_version = avail.version
             except Exception:
-                latest = installed
+                # При ошибке используем кэш или installed
+                if not self._latest_version:
+                    self._latest_version = installed
 
-        self._mqtt_service.publish_update_state(installed, latest, self._in_progress)
+        self._mqtt_service.publish_update_state(installed, self._latest_version, self._in_progress)
 
     # ---------------------------------------------------------------------
     # Public API
