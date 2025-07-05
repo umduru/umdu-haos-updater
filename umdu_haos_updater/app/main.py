@@ -80,7 +80,35 @@ def handle_install_cmd(cfg: AddonConfig, orchestrator: UpdateOrchestrator):
     orchestrator.run_install(bundle_path, latest_version)
 
 
-async def try_initialize_mqtt(cfg: AddonConfig, loop: asyncio.AbstractEventLoop) -> MqttService | None:
+async def _configure_mqtt_service(
+    mqtt_service: MqttService,
+    orchestrator: UpdateOrchestrator,
+    loop: asyncio.AbstractEventLoop,
+    cfg: AddonConfig,
+    event: asyncio.Event,
+    is_reconnect: bool = False,
+):
+    """Настраивает колбэки и состояние для нового экземпляра MQTT."""
+    log_prefix = " (повторное)" if is_reconnect else ""
+    
+    orchestrator.set_mqtt_service(mqtt_service)
+    mqtt_service.on_install_cmd = lambda: loop.run_in_executor(
+        None, handle_install_cmd, cfg, orchestrator
+    )
+    
+    try:
+        await asyncio.wait_for(event.wait(), timeout=10.0)
+        logger.info(f"MQTT-соединение{log_prefix} подтверждено.")
+        mqtt_service.clear_retained_messages()
+    except asyncio.TimeoutError:
+        logger.warning(f"MQTT{log_prefix} не подключился за 10 секунд.")
+
+
+async def try_initialize_mqtt(
+    cfg: AddonConfig, 
+    loop: asyncio.AbstractEventLoop,
+    connection_event: asyncio.Event
+) -> MqttService | None:
     """Пытается инициализировать MQTT сервис (одна попытка)."""
     logger.info("Попытка инициализации MQTT...")
     host, port, user, passwd = await loop.run_in_executor(None, lambda: build_mqtt_params(cfg))
@@ -93,6 +121,7 @@ async def try_initialize_mqtt(cfg: AddonConfig, loop: asyncio.AbstractEventLoop)
             password=passwd,
             discovery=True,
             on_install_cmd=None,
+            connection_event=connection_event,
         )
         mqtt_service.start()
         logger.info("MQTT сервис успешно запущен.")
@@ -125,7 +154,8 @@ async def main() -> None:
     loop = asyncio.get_running_loop()
 
     # --- MQTT setup ---
-    mqtt_service = await try_initialize_mqtt(cfg, loop)
+    mqtt_connection_event = asyncio.Event()
+    mqtt_service = await try_initialize_mqtt(cfg, loop, mqtt_connection_event)
 
     # Notification service & orchestrator
     notifier = NotificationService(enabled=cfg.notifications)
@@ -134,16 +164,9 @@ async def main() -> None:
 
     # Устанавливаем обработчик после создания orchestrator
     if mqtt_service:
-        # Запускаем обработчик в пуле потоков, чтобы не блокировать MQTT-поток
-        mqtt_service.on_install_cmd = lambda: loop.run_in_executor(
-            None, handle_install_cmd, cfg, orchestrator
+        await _configure_mqtt_service(
+            mqtt_service, orchestrator, loop, cfg, mqtt_connection_event
         )
-
-    # Инициализация MQTT состояния при старте
-    if mqtt_service:
-        await asyncio.sleep(2)  # Ждем подключения
-        mqtt_service.clear_retained_messages()  # Очищаем после подключения
-        # НЕ публикуем состояние здесь - это сделает первый auto_cycle_once()
 
     while True:
         # Полный цикл обновления выполняем в пуле потоков, чтобы не
@@ -153,17 +176,13 @@ async def main() -> None:
         # Если MQTT не был подключен при старте, пытаемся снова
         if not mqtt_service:
             logger.info("MQTT не подключен. Попытка переподключения...")
-            mqtt_service = await try_initialize_mqtt(cfg, loop)
+            mqtt_connection_event.clear()
+            mqtt_service = await try_initialize_mqtt(cfg, loop, mqtt_connection_event)
             if mqtt_service:
                 logger.info("MQTT успешно переподключен.")
-                # Настраиваем новый инстанс
-                orchestrator.set_mqtt_service(mqtt_service)
-                # Тоже самое для переподключения
-                mqtt_service.on_install_cmd = lambda: loop.run_in_executor(
-                    None, handle_install_cmd, cfg, orchestrator
+                await _configure_mqtt_service(
+                    mqtt_service, orchestrator, loop, cfg, mqtt_connection_event, is_reconnect=True
                 )
-                await asyncio.sleep(2)
-                mqtt_service.clear_retained_messages()
                 # Состояние опубликует следующий auto_cycle_once()
 
         await asyncio.sleep(cfg.update_check_interval)

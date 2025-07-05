@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from typing import Callable
+from threading import Lock
 
 from .config import AddonConfig
 from .updater import check_for_update_and_download, fetch_available_update
@@ -24,6 +25,7 @@ class UpdateOrchestrator:
         self._notifier = notifier or NotificationService(enabled=cfg.notifications)
         self._mqtt_service: MqttService | None = None
         self._in_progress: bool = False
+        self._lock = Lock()  # Блокировка для _in_progress
         self._latest_version: str | None = None  # Кэш последней известной версии
         # Когда true — цикл auto_update временно приостанавливается, т.к.
         # ручная установка already выполняется в другом потоке.
@@ -55,16 +57,21 @@ class UpdateOrchestrator:
                 self._latest_version = avail.version
                 _LOGGER.debug("Orchestrator: получена latest_version=%s", self._latest_version)
             except Exception:
-                # При ошибке используем installed как fallback
-                self._latest_version = installed
-                _LOGGER.debug("Orchestrator: fallback latest_version=%s", self._latest_version)
+                # При ошибке НЕ меняем _latest_version, используем кэш или None
+                _LOGGER.warning("Orchestrator: не удалось получить latest_version, используется кэш")
+                if self._latest_version is None:
+                    # Если кэш пуст - используем installed как fallback
+                    self._latest_version = installed
+                    _LOGGER.debug("Orchestrator: fallback latest_version=%s", self._latest_version)
 
+        with self._lock:
+            in_progress = self._in_progress
         _LOGGER.debug("Orchestrator: публикуем состояние installed=%s, latest=%s, in_progress=%s", 
-                     installed, self._latest_version, self._in_progress)
+                     installed, self._latest_version, in_progress)
         
         # Публикуем состояние с дополнительной проверкой
         try:
-            self._mqtt_service.publish_update_state(installed, self._latest_version, self._in_progress)
+            self._mqtt_service.publish_update_state(installed, self._latest_version, in_progress)
             # Небольшая задержка для обеспечения доставки
             import time
             time.sleep(0.2)
@@ -98,9 +105,10 @@ class UpdateOrchestrator:
 
     def auto_cycle_once(self) -> None:
         """Single iteration of auto-update loop (non-blocking)."""
-        if self._in_progress:
-            _LOGGER.debug("in_progress=True – пропуск auto_cycle_once")
-            return
+        with self._lock:
+            if self._in_progress:
+                _LOGGER.debug("in_progress=True – пропуск auto_cycle_once")
+                return
 
         # Получаем информацию об обновлении
         try:
@@ -132,12 +140,19 @@ class UpdateOrchestrator:
         latest_version: str | None = None,
     ) -> None:
         """Запускает RAUC-установку и публикует MQTT-индикатор."""
-        self._in_progress = True
+        with self._lock:
+            if self._in_progress:
+                _LOGGER.warning("Установка уже запущена, пропуск нового запроса")
+                return
+            self._in_progress = True
+
         self.publish_state(latest=latest_version)
 
         success = self.install_if_ready(bundle_path)
 
-        self._in_progress = False
+        with self._lock:
+            self._in_progress = False
+            
         if self._mqtt_service:
             if success:
                 self._mqtt_service.deactivate_update_entity()

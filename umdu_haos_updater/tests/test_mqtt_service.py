@@ -36,7 +36,9 @@ class TestMqttService:
                 "in_progress": True,
             }
         )
-        mock_client.publish.assert_any_call(STATE_TOPIC, expected_payload, retain=True)
+        mock_client.publish.assert_any_call(
+            STATE_TOPIC, expected_payload, retain=False, qos=1
+        )
 
     @patch("app.mqtt_service.mqtt.Client")
     def test_discovery_messages_on_connect(self, mock_client_cls):
@@ -93,3 +95,20 @@ class TestMqttService:
         # Два топика должны быть очищены (без REBOOT_AVAIL_TOPIC)
         topics_cleared = [call.args[0] for call in mock_client.publish.call_args_list if call.args[1] == ""]
         assert set(topics_cleared) >= {STATE_TOPIC, UPDATE_AVAIL_TOPIC} 
+
+    @patch("app.mqtt_service.mqtt.Client")
+    def test_publish_update_availability(self, mock_client_cls):
+        """Проверка публикации доступности обновления."""
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        service = MqttService(host="localhost", discovery=True)
+        # Симулируем успешное подключение
+        service._on_connect(mock_client, None, None, 0)
+
+        service.publish_update_availability(True)
+
+        # Проверяем, что вызван publish с правильными параметрами
+        mock_client.publish.assert_any_call(
+            UPDATE_AVAIL_TOPIC, "online", retain=True
+        )

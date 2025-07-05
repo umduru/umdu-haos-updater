@@ -57,9 +57,10 @@ def is_newer(ver_a: str, ver_b: str) -> bool:
     """Возвращает True если ver_a > ver_b."""
     try:
         return Version(ver_a) > Version(ver_b)
-    except Exception:
+    except Exception as e:
         # fallback — сравнение строк
-        return ver_a != ver_b and ver_a > ver_b
+        logger.warning("Не удалось сравнить версии '%s' и '%s': %s", ver_a, ver_b, e)
+        return False
 
 
 def download_update(info: UpdateInfo) -> Path:

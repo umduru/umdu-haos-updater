@@ -28,20 +28,25 @@ class AddonConfig:
         with CONFIG_PATH.open("r", encoding="utf-8") as fp:
             data = json.load(fp)
 
-        # Приводим числовые поля к int (в options.json могут быть строки)
-        def _to_int(val, default):
-            try:
-                return int(val)
-            except Exception:
-                return default
+        # Упрощенное приведение типов
+        try:
+            update_check_interval = int(data.get("update_check_interval", 3600))
+        except (ValueError, TypeError):
+            update_check_interval = 3600
+        
+        try:
+            mqtt_port_raw = data.get("mqtt_port")
+            mqtt_port = int(mqtt_port_raw) if mqtt_port_raw is not None else None
+        except (ValueError, TypeError):
+            mqtt_port = None
 
         return cls(
-            update_check_interval=_to_int(data.get("update_check_interval"), 3600),
+            update_check_interval=update_check_interval,
             auto_update=data.get("auto_update", False),
             notifications=data.get("notifications", True),
             mqtt_discovery=data.get("mqtt_discovery", True),
             mqtt_host=data.get("mqtt_host") or None,
-            mqtt_port=_to_int(data.get("mqtt_port"), None) if data.get("mqtt_port") else None,
+            mqtt_port=mqtt_port,
             mqtt_user=data.get("mqtt_user") or None,
             mqtt_password=data.get("mqtt_password") or None,
             debug=data.get("debug", False),

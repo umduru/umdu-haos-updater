@@ -142,11 +142,20 @@ class TestIsNewer:
         """Тест одинаковых версий"""
         assert is_newer("15.2.1", "15.2.1") is False
 
-    def test_invalid_versions_fallback(self):
-        """Тест fallback для невалидных версий"""
-        assert is_newer("abc", "def") is False  # abc < def
-        assert is_newer("xyz", "abc") is True   # xyz > abc
-        assert is_newer("same", "same") is False
+    def test_invalid_versions_returns_false_and_logs(self, caplog):
+        """Тест что невалидные версии возвращают False и логируют ошибку"""
+        import logging
+        caplog.set_level(logging.WARNING)
+
+        # Вызов с невалидными версиями
+        result = is_newer("not-a-version", "1.0.0")
+        
+        # Проверяем что вернулось False
+        assert result is False
+        
+        # Проверяем, что в лог было записано предупреждение
+        assert len(caplog.records) == 1
+        assert "Не удалось сравнить версии" in caplog.text
 
 
 class TestVerifySha256:

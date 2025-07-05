@@ -30,12 +30,12 @@ def install_bundle(path: Path) -> bool:
             logger.warning("Не удалось создать символическую ссылку %s: %s", share_link, e)
 
     # RAUC выполняется на хосте, поэтому нужен хостовый путь
-    host_path = str(path).replace("/share/", "/mnt/data/supervisor/share/")
+    host_path = Path("/mnt/data/supervisor/share").joinpath(path.relative_to("/share"))
     logger.info("Запуск установки RAUC: %s (хостовый путь: %s)", path, host_path)
     try:
         # Печатаем вывод RAUC построчно, используем хостовый путь
         proc = subprocess.Popen(
-            ["rauc", "install", host_path],
+            ["rauc", "install", str(host_path)],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,

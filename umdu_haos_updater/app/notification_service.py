@@ -31,7 +31,11 @@ class NotificationService:
             _LOGGER.debug("Notifications disabled: %s — %s", title, message)
             return
 
-        payload: dict[str, Any] = {"title": title, "message": message}
+        payload: dict[str, Any] = {
+            "title": title, 
+            "message": message,
+            "notification_id": "umdu_haos_updater_notification"
+        }
         try:
             r = requests.post(
                 f"{SUPERVISOR_URL}/core/api/services/persistent_notification/create",

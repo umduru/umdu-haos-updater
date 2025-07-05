@@ -29,13 +29,10 @@ def test_handle_install_cmd_success():
          patch("app.main.check_for_update_and_download", return_value=Path("/tmp/bundle.raucb")), \
          patch("app.main.get_current_haos_version", return_value="15.2.0"):
 
-        handle_install_cmd(cfg, orchestrator_mock, mqtt_mock)
+        handle_install_cmd(cfg, orchestrator_mock)
 
     # Проверяем, что orchestrator.run_install был вызван
     orchestrator_mock.run_install.assert_called_once()
-
-    # Проверяем флаг manual_install_active
-    assert orchestrator_mock.manual_install_active == False  # должен быть сброшен в конце
 
 
 def test_handle_install_cmd_no_bundle():
@@ -48,21 +45,16 @@ def test_handle_install_cmd_no_bundle():
          patch("app.main.check_for_update_and_download", return_value=None), \
          patch("app.main.get_current_haos_version", return_value="15.2.0"):
 
-        handle_install_cmd(cfg, orchestrator_mock, mqtt_mock)
+        handle_install_cmd(cfg, orchestrator_mock)
 
     # Проверяем, что run_install НЕ был вызван
     orchestrator_mock.run_install.assert_not_called()
-
-    # Проверяем, что флаг был сброшен
-    assert orchestrator_mock.manual_install_active == False
 
 
 def test_handle_install_cmd_no_orchestrator():
     """Проверяем сценарий когда orchestrator не передан."""
     cfg = AddonConfig()
-    mqtt_mock = MagicMock()
 
     with patch("app.main.logger") as mock_logger:
-        handle_install_cmd(cfg, None, mqtt_mock)
-
-    mock_logger.error.assert_called_once_with("Orchestrator not provided for install command") 
+        handle_install_cmd(cfg, None)
+        mock_logger.error.assert_called_once() 

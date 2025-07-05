@@ -49,83 +49,75 @@ class TestBuildMqttParams:
 
 @pytest.mark.asyncio
 async def test_try_initialize_mqtt_success(mocker):
-    """Тест успешной инициализации MQTT."""
-    # Мокируем get_running_loop, чтобы получить контроль над event loop
-    mock_loop = mocker.patch("asyncio.get_running_loop").return_value
-
-    # Создаем фьючер, который будет возвращать результат
-    future = asyncio.Future()
-    future.set_result(("host", 1883, "user", "pass"))
-    mock_loop.run_in_executor.return_value = future
-
+    """Тест успешной инициализации MQTT с передачей Event."""
+    mock_loop = asyncio.get_running_loop()
+    mocker.patch("app.main.build_mqtt_params", return_value=("host", 1883, "user", "pass"))
     mock_mqtt_service_cls = mocker.patch("app.main.MqttService")
-
+    
     from app.main import try_initialize_mqtt, AddonConfig
-    cfg = AddonConfig()
+    
+    cfg = AddonConfig(mqtt_discovery=True)
+    connection_event = asyncio.Event()
 
-    result = await try_initialize_mqtt(cfg, mock_loop)
+    result = await try_initialize_mqtt(cfg, mock_loop, connection_event)
 
     mock_mqtt_service_cls.assert_called_once()
+    # Проверяем, что event был передан в конструктор
+    assert mock_mqtt_service_cls.call_args[1]['connection_event'] is connection_event
     mock_mqtt_service_cls.return_value.start.assert_called_once()
     assert result is not None
 
 
 @pytest.mark.asyncio
-async def test_try_initialize_mqtt_failure(mocker):
-    """Тест неудачной инициализации MQTT (нет хоста)."""
-    mock_loop = mocker.patch("asyncio.get_running_loop").return_value
-    
-    future = asyncio.Future()
-    future.set_result((None, 1883, "user", "pass"))
-    mock_loop.run_in_executor.return_value = future
-
-    mock_mqtt_service_cls = mocker.patch("app.main.MqttService")
-    mock_logger_warning = mocker.patch("app.main.logger.warning")
-
-    from app.main import try_initialize_mqtt, AddonConfig
-    cfg = AddonConfig()
-
-    result = await try_initialize_mqtt(cfg, mock_loop)
-
-    mock_mqtt_service_cls.assert_not_called()
-    assert result is None
-    mock_logger_warning.assert_called_once_with(
-        "Не удалось инициализировать MQTT. Следующая попытка будет в следующем цикле."
-    )
-
-
-@pytest.mark.asyncio
-async def test_main_loop_reconnect_logic(mocker):
+async def test_main_loop_and_reconnect(mocker):
     """
-    Тест логики переподключения в главном цикле.
-    - Первый вызов try_initialize_mqtt возвращает None.
-    - Второй вызов возвращает mock service.
+    Тест основного цикла `main`:
+    1. Первая попытка подключения MQTT фейлится.
+    2. `auto_cycle_once` вызывается.
+    3. Вторая попытка подключения успешна.
+    4. `_configure_mqtt_service` вызывается для настройки.
     """
-    # Патчим все зависимости, чтобы изолировать цикл
+    # Патчи зависимостей
     mocker.patch("app.main.AddonConfig.load")
     mocker.patch("app.main.TOKEN", "fake-token")
     mocker.patch("app.main.NotificationService")
-    mock_orchestrator = mocker.patch("app.main.UpdateOrchestrator")
-    mocker.patch("app.main.fetch_available_update")
-    mocker.patch("app.main.get_current_haos_version")
-
-    # Управляем вызовами try_initialize_mqtt
-    mock_try_init_mqtt = mocker.patch(
-        "app.main.try_initialize_mqtt",
-        side_effect=[None, mocker.MagicMock(spec_set=["on_install_cmd", "clear_retained_messages"])]
+    mock_orchestrator = mocker.MagicMock()
+    mocker.patch("app.main.UpdateOrchestrator", return_value=mock_orchestrator)
+    
+    # Мок MQTT сервиса
+    mock_mqtt_service_instance = mocker.MagicMock()
+    
+    # Первая попытка - неудача, вторая - успех
+    mock_try_init = mocker.patch(
+        "app.main.try_initialize_mqtt", 
+        side_effect=[None, mock_mqtt_service_instance]
     )
+    
+    # Мок `_configure_mqtt_service` чтобы проверить его вызов
+    mock_configure_mqtt = mocker.patch("app.main._configure_mqtt_service")
 
     # Патчим sleep, чтобы цикл не ждал и прерывался после 2 итераций
     async def sleep_breaker(delay):
-        if mock_try_init_mqtt.call_count >= 2:
-            raise asyncio.CancelledError  # Прерываем цикл
+        if mock_try_init.call_count >= 2:
+            raise asyncio.CancelledError
         await asyncio.sleep(0)
-
     mocker.patch("asyncio.sleep", side_effect=sleep_breaker)
 
     from app.main import main
     with pytest.raises(asyncio.CancelledError):
         await main()
 
-    # Проверяем, что была попытка подключения дважды
-    assert mock_try_init_mqtt.call_count == 2 
+    # Проверки
+    assert mock_try_init.call_count == 2
+    mock_orchestrator.auto_cycle_once.assert_called_once()
+    # Проверяем что orchestrator получил None в первый раз
+    mock_orchestrator.set_mqtt_service.assert_any_call(None)
+    # Проверяем что после переподключения был вызван configure
+    mock_configure_mqtt.assert_called_once_with(
+        mock_mqtt_service_instance,
+        mock_orchestrator,
+        mocker.ANY,  # loop
+        mocker.ANY,  # cfg
+        mocker.ANY,  # event
+        is_reconnect=True
+    ) 

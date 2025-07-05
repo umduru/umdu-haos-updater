@@ -5,6 +5,7 @@ import logging
 import threading
 from typing import Callable, Optional
 import time
+import asyncio
 
 import paho.mqtt.client as mqtt
 
@@ -31,11 +32,13 @@ class MqttService:
         password: str | None = None,
         discovery: bool = True,
         on_install_cmd: Optional[Callable[[], None]] = None,
+        connection_event: Optional[asyncio.Event] = None,
     ) -> None:
         self.host = host
         self.port = port
         self.discovery_enabled = discovery
         self.on_install_cmd = on_install_cmd
+        self.connection_event = connection_event
 
         self._client = mqtt.Client(client_id="umdu_haos_updater", clean_session=True)
         
@@ -139,6 +142,10 @@ class MqttService:
             return
         
         logger.info("MQTT: connected")
+
+        # Сигнализируем об успешном подключении
+        if self.connection_event:
+            self.connection_event.set()
 
         # Небольшая задержка для стабилизации соединения
         time.sleep(0.5)
