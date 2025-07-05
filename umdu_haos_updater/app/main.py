@@ -50,7 +50,7 @@ def build_mqtt_params(cfg: AddonConfig):
 # ------------------------------------------------------------------
 
 
-def handle_install_cmd(cfg: AddonConfig, orchestrator: UpdateOrchestrator, mqtt_service: MqttService | None = None):
+def handle_install_cmd(cfg: AddonConfig, orchestrator: UpdateOrchestrator):
     """Обработчик MQTT-команды `install`.
 
     • Всегда публикует `in_progress=True`, чтобы Home Assistant показал спиннер.
@@ -134,7 +134,10 @@ async def main() -> None:
 
     # Устанавливаем обработчик после создания orchestrator
     if mqtt_service:
-        mqtt_service.on_install_cmd = lambda: handle_install_cmd(cfg, orchestrator)
+        # Запускаем обработчик в пуле потоков, чтобы не блокировать MQTT-поток
+        mqtt_service.on_install_cmd = lambda: loop.run_in_executor(
+            None, handle_install_cmd, cfg, orchestrator
+        )
 
     # Инициализация MQTT состояния при старте
     if mqtt_service:
@@ -155,7 +158,10 @@ async def main() -> None:
                 logger.info("MQTT успешно переподключен.")
                 # Настраиваем новый инстанс
                 orchestrator.set_mqtt_service(mqtt_service)
-                mqtt_service.on_install_cmd = lambda: handle_install_cmd(cfg, orchestrator)
+                # Тоже самое для переподключения
+                mqtt_service.on_install_cmd = lambda: loop.run_in_executor(
+                    None, handle_install_cmd, cfg, orchestrator
+                )
                 await asyncio.sleep(2)
                 mqtt_service.clear_retained_messages()
                 # Состояние опубликует следующий auto_cycle_once()
