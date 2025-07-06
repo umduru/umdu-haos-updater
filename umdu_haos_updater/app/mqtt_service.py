@@ -60,6 +60,11 @@ class MqttService:
             self.port = int(port)
         except (TypeError, ValueError):
             raise ValueError(f"Invalid port value: {port}") from None
+
+        # Validate TCP port range (1-65535)
+        if not 1 <= self.port <= 65535:
+            raise ValueError(f"Port out of valid range (1-65535): {self.port}")
+
         self.discovery_enabled = discovery
         self.on_install_cmd = on_install_cmd
         self.connection_event = connection_event
@@ -194,15 +199,16 @@ class MqttService:
         userdata: Any,
         rc: int,
     ) -> None:  # noqa: D401
-        with self._lock:
-            self._connected = False
-        logger.warning("MQTT: disconnected code=%s", rc)
-        
+        # Публикуем offline-статус ПЕРЕД сменой флага _connected, иначе _is_ready() вернёт False
         if self.discovery_enabled and self._update_entity_active:
             try:
                 self.publish_update_availability(False)
             except Exception as e:
                 logger.debug("Не удалось отправить offline статус при отключении: %s", e)
+
+        with self._lock:
+            self._connected = False
+        logger.warning("MQTT: disconnected code=%s", rc)
 
     def _on_message(
         self,
