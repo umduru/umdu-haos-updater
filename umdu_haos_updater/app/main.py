@@ -10,7 +10,11 @@ from pathlib import Path
 from .config import AddonConfig
 from .updater import check_for_update_and_download, fetch_available_update
 from .mqtt_service import MqttService
-from .supervisor_api import get_mqtt_service, get_current_haos_version, SUPERVISOR_URL, TOKEN
+from .supervisor_api import (
+    get_mqtt_service,
+    async_get_mqtt_service,  # new async helper
+    TOKEN,
+)
 from .notification_service import NotificationService
 from .orchestrator import UpdateOrchestrator
 import requests
@@ -111,7 +115,7 @@ async def try_initialize_mqtt(
 ) -> MqttService | None:
     """Пытается инициализировать MQTT сервис (одна попытка)."""
     logger.info("Попытка инициализации MQTT...")
-    host, port, user, passwd = await loop.run_in_executor(None, lambda: build_mqtt_params(cfg))
+    host, port, user, passwd = await build_mqtt_params_async(cfg)
 
     if cfg.mqtt_discovery and host:
         mqtt_service = MqttService(
@@ -186,6 +190,33 @@ async def main() -> None:
                 # Состояние опубликует следующий auto_cycle_once()
 
         await asyncio.sleep(cfg.update_check_interval)
+
+
+# ---------------------------------------------------------------------------
+# Async helper to avoid blocking executor for Supervisor API call
+# ---------------------------------------------------------------------------
+
+
+async def build_mqtt_params_async(cfg: AddonConfig):
+    """Asynchronous counterpart of *build_mqtt_params* using aiohttp."""
+    host = cfg.mqtt_host
+    port = cfg.mqtt_port or 1883
+    user = cfg.mqtt_user
+    password = cfg.mqtt_password
+
+    if not host:
+        try:
+            sup = await async_get_mqtt_service()
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[async] MQTT params via Supervisor API failed: %s", exc)
+            sup = None
+        if sup and sup.get("host"):
+            host = sup["host"]
+            port = sup.get("port") or port
+            user = user or sup.get("username")
+            password = password or sup.get("password")
+
+    return host, port, user, password
 
 
 if __name__ == "__main__":

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import requests
+import aiohttp
+import aiofiles
 from packaging.version import Version
 from pathlib import Path
 import hashlib
@@ -135,4 +137,106 @@ def check_for_update_and_download(auto_download: bool = False) -> Path | None:
                 return None
     else:
         logger.info("Система актуальна")
+    return None
+
+
+# -----------------------------------------------------------------------------
+# Async variants (aiohttp, aiofiles)
+# -----------------------------------------------------------------------------
+
+
+async def async_fetch_available_update(timeout: float = 5.0) -> "UpdateInfo":
+    """Asynchronous version of :func:`fetch_available_update`."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(GITHUB_VERSIONS_URL, timeout=timeout) as resp:
+                resp.raise_for_status()
+                payload = await resp.json()
+                data = payload["hassos"]["umdu-k1"]
+                if isinstance(data, dict):
+                    return UpdateInfo(version=str(data.get("version")), sha256=data.get("sha256"))
+                return UpdateInfo(version=str(data))
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Не удалось получить versions.json (async)")
+        raise NetworkError("Failed to fetch available update info (async)") from exc
+
+
+async def _async_verify_sha256(path: Path, expected: str) -> bool:
+    """Async helper to verify sha256 checksum of *path*."""
+    sha = hashlib.sha256()
+    async with aiofiles.open(path, "rb") as fp:
+        while True:
+            chunk = await fp.read(8192)
+            if not chunk:
+                break
+            sha.update(chunk)
+    return sha.hexdigest().lower() == expected.lower()
+
+
+async def async_download_update(info: "UpdateInfo", timeout: float = 30.0) -> Path:
+    """Asynchronous version of :func:`download_update`."""
+    path = info.download_path
+
+    # Quick checks identical to sync implementation
+    if path.exists():
+        if info.sha256:
+            if await _async_verify_sha256(path, info.sha256):
+                logger.info("Файл обновления уже существует и валиден: %s", path)
+                return path
+            logger.warning("Файл существует но хэш не совпадает, перезагружаем: %s", path)
+            path.unlink(missing_ok=True)
+        else:
+            logger.info("Файл обновления уже существует: %s", path)
+            return path
+
+    # Очистка старых бандлов (sync – negligible cost)
+    for p in SHARE_DIR.glob("haos_umdu-k1-*.raucb"):
+        if p.name != path.name:
+            p.unlink(missing_ok=True)
+
+    logger.info("Загрузка обновления (async) %s …", info.url)
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(info.url, timeout=timeout) as resp:
+                resp.raise_for_status()
+                async with aiofiles.open(path, "wb") as fw:
+                    async for chunk in resp.content.iter_chunked(8192):
+                        await fw.write(chunk)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Ошибка загрузки бандла (async)")
+        raise DownloadError("Error downloading update bundle (async)") from exc
+
+    if info.sha256 and not await _async_verify_sha256(path, info.sha256):
+        logger.error("Хэш-сумма не совпала для %s", path)
+        path.unlink(missing_ok=True)
+        raise DownloadError("SHA256 mismatch after async download")
+
+    logger.info("Файл обновления сохранён: %s", path)
+    return path
+
+
+async def async_check_for_update_and_download(auto_download: bool = False) -> Path | None:
+    """Async counterpart of :func:`check_for_update_and_download`."""
+    current = get_current_haos_version()
+    if not current:
+        logger.warning("Не удалось определить установленную версию — пропускаем проверку")
+        return None
+
+    try:
+        avail = await async_fetch_available_update()
+    except NetworkError:  # noqa: PERF203  – reusing same error class
+        logger.info("Не удалось получить информацию об обновлении (async)")
+        return None
+
+    logger.info("Текущая версия: %s; доступная: %s", current, avail.version)
+    if is_newer(avail.version, current):
+        logger.info("Найдена новая версия %s", avail.version)
+        if auto_download:
+            try:
+                return await async_download_update(avail)
+            except DownloadError as exc:
+                logger.error("Скачивание обновления не удалось: %s", exc)
+                return None
+    else:
+        logger.info("Система актуальна (async)")
     return None 
