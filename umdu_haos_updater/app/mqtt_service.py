@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import logging
 import threading
-from typing import Callable, Optional
+from typing import Callable, Optional, Any
 import time
 import asyncio
 
 import paho.mqtt.client as mqtt
+from paho.mqtt.client import Client as MqttClient
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +133,13 @@ class MqttService:
     # ---------------------------------------------------------------------
     # MQTT Callbacks
     # ---------------------------------------------------------------------
-    def _on_connect(self, client, userdata, flags, rc):  # noqa: D401
+    def _on_connect(
+        self,
+        client: MqttClient,
+        userdata: Any,
+        flags: dict[str, Any],
+        rc: int,
+    ) -> None:  # noqa: D401
         success = rc == 0
         with self._lock:
             self._connected = success
@@ -158,7 +165,12 @@ class MqttService:
             if self._update_entity_active:
                 self.publish_update_availability(True)
 
-    def _on_disconnect(self, client, userdata, rc):  # noqa: D401
+    def _on_disconnect(
+        self,
+        client: MqttClient,
+        userdata: Any,
+        rc: int,
+    ) -> None:  # noqa: D401
         with self._lock:
             self._connected = False
         logger.warning("MQTT: disconnected code=%s", rc)
@@ -169,7 +181,12 @@ class MqttService:
             except Exception as e:
                 logger.debug("Не удалось отправить offline статус при отключении: %s", e)
 
-    def _on_message(self, client, userdata, msg):  # noqa: D401
+    def _on_message(
+        self,
+        client: MqttClient,
+        userdata: Any,
+        msg: mqtt.MQTTMessage,
+    ) -> None:  # noqa: D401
         topic = msg.topic
         payload = msg.payload.decode("utf-8").strip()
         logger.debug("MQTT: message %s %s", topic, payload)
