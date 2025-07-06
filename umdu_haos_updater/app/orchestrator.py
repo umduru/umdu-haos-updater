@@ -24,12 +24,12 @@ class UpdateOrchestrator:
         self._cfg = cfg
         self._notifier = notifier or NotificationService(enabled=cfg.notifications)
         self._mqtt_service: MqttService | None = None
-        self._in_progress: bool = False
-        self._lock = Lock()  # Блокировка для _in_progress
+        # Блокировка, сигнализирующая, что установка уже выполняется.
+        # Используем lock вместо отдельного булевого флага, чтобы избежать
+        # возможных гонок между потоками и упростить синхронизацию.
+        self._install_lock = Lock()
+
         self._latest_version: str | None = None  # Кэш последней известной версии
-        # Когда true — цикл auto_update временно приостанавливается, т.к.
-        # ручная установка already выполняется в другом потоке.
-        self.manual_install_active: bool = False
 
     def set_mqtt_service(self, mqtt_service: MqttService | None) -> None:
         """Устанавливает MQTT сервис для публикации состояния."""
@@ -64,8 +64,7 @@ class UpdateOrchestrator:
                     self._latest_version = installed
                     _LOGGER.debug("Orchestrator: fallback latest_version=%s", self._latest_version)
 
-        with self._lock:
-            in_progress = self._in_progress
+        in_progress = self._install_lock.locked()
         _LOGGER.debug("Orchestrator: публикуем состояние installed=%s, latest=%s, in_progress=%s", 
                      installed, self._latest_version, in_progress)
         
@@ -105,10 +104,9 @@ class UpdateOrchestrator:
 
     def auto_cycle_once(self) -> None:
         """Single iteration of auto-update loop (non-blocking)."""
-        with self._lock:
-            if self._in_progress:
-                _LOGGER.debug("in_progress=True – пропуск auto_cycle_once")
-                return
+        if self._install_lock.locked():
+            _LOGGER.debug("install in progress – пропуск auto_cycle_once")
+            return
 
         # Получаем информацию об обновлении
         try:
@@ -140,19 +138,19 @@ class UpdateOrchestrator:
         latest_version: str | None = None,
     ) -> None:
         """Запускает RAUC-установку и публикует MQTT-индикатор."""
-        with self._lock:
-            if self._in_progress:
-                _LOGGER.warning("Установка уже запущена, пропуск нового запроса")
-                return
-            self._in_progress = True
+        # Пытаемся захватить блокировку – если не удалось, значит установка уже идёт.
+        if not self._install_lock.acquire(blocking=False):
+            _LOGGER.warning("Установка уже запущена, пропуск нового запроса")
+            return
 
         self.publish_state(latest=latest_version)
 
-        success = self.install_if_ready(bundle_path)
+        try:
+            success = self.install_if_ready(bundle_path)
+        finally:
+            # Всегда освобождаем блокировку, даже если возникло исключение.
+            self._install_lock.release()
 
-        with self._lock:
-            self._in_progress = False
-            
         if self._mqtt_service:
             if success:
                 self._mqtt_service.deactivate_update_entity()
