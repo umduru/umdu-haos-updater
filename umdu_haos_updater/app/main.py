@@ -185,28 +185,28 @@ async def main() -> None:
             mqtt_service, orchestrator, loop, cfg, mqtt_connection_event
         )
 
-    while True:
-        # Полный цикл обновления выполняем в пуле потоков, чтобы не
-        # блокировать event-loop.
-        await loop.run_in_executor(None, orchestrator.auto_cycle_once)
+    try:
+        while True:
+            # Полный цикл обновления выполняем в пуле потоков, чтобы не
+            # блокировать event-loop.
+            await loop.run_in_executor(None, orchestrator.auto_cycle_once)
 
-        # Если MQTT не был подключен при старте, пытаемся снова
-        if not mqtt_service:
-            logger.info("MQTT не подключен. Попытка переподключения...")
-            mqtt_connection_event.clear()
-            mqtt_service = await try_initialize_mqtt(cfg, loop, mqtt_connection_event)
-            if mqtt_service:
-                logger.info("MQTT успешно переподключен.")
-                await _configure_mqtt_service(
-                    mqtt_service, orchestrator, loop, cfg, mqtt_connection_event, is_reconnect=True
-                )
-                # Состояние опубликует следующий auto_cycle_once()
+            # Если MQTT не был подключен при старте, пытаемся снова
+            if not mqtt_service:
+                logger.info("MQTT не подключен. Попытка переподключения...")
+                mqtt_connection_event.clear()
+                mqtt_service = await try_initialize_mqtt(cfg, loop, mqtt_connection_event)
+                if mqtt_service:
+                    logger.info("MQTT успешно переподключен.")
+                    await _configure_mqtt_service(
+                        mqtt_service, orchestrator, loop, cfg, mqtt_connection_event, is_reconnect=True
+                    )
+                    # Состояние опубликует следующий auto_cycle_once()
 
-        await asyncio.sleep(cfg.update_check_interval)
-
-    # В теории мы сюда не доходим, но при любом выходе гарантируем
-    # корректное завершение профилировщика.
-    stop_profiling()
+            await asyncio.sleep(cfg.update_check_interval)
+    finally:
+        # Гарантируем корректное завершение профилировщика при любом выходе.
+        stop_profiling()
 
 
 # ---------------------------------------------------------------------------
