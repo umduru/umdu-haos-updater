@@ -1,5 +1,5 @@
-aiohttp>=3.8
-packaging>=23.0
+aiohttp==3.9.5
+packaging==24.2
 paho-mqtt==2.1.0
 requests==2.32.3
-aiofiles>=23.0 
+aiofiles==23.2.1 
