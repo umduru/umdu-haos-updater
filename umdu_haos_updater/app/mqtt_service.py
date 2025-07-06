@@ -8,7 +8,6 @@ import time
 import asyncio
 
 import paho.mqtt.client as mqtt  # type: ignore
-from paho.mqtt.client import Client as MqttClient
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +39,9 @@ class InstallCallback(Protocol[_T_contra]):
 
     def __call__(self) -> Any:  # noqa: D401 – simple callable signature
         ...
+
+
+# Псевдоним не нужен – используем `mqtt.Client` напрямую.
 
 
 class MqttService:
@@ -163,7 +165,7 @@ class MqttService:
     # ---------------------------------------------------------------------
     def _on_connect(
         self,
-        client: MqttClient,
+        client: mqtt.Client,
         userdata: Any,
         flags: dict[str, Any],
         rc: int,
@@ -195,7 +197,7 @@ class MqttService:
 
     def _on_disconnect(
         self,
-        client: MqttClient,
+        client: mqtt.Client,
         userdata: Any,
         rc: int,
     ) -> None:  # noqa: D401
@@ -212,7 +214,7 @@ class MqttService:
 
     def _on_message(
         self,
-        client: MqttClient,
+        client: mqtt.Client,
         userdata: Any,
         msg: mqtt.MQTTMessage,
     ) -> None:  # noqa: D401
