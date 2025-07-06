@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import logging
 import requests
-import aiohttp
+import aiohttp  # type: ignore
 
 from .errors import SupervisorError, NetworkError
 from .cache_utils import ttl_cache

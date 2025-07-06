@@ -7,4 +7,5 @@ types-aiohttp==3.9.0.20240406
 types-packaging==23.0.0.20240206
 hypothesis==6.98.4
 types-pytest==8.0.0.0
-types-hypothesis==6.98.0.0 
+types-hypothesis==6.98.0.0
+types-aiofiles==23.0.0.0 

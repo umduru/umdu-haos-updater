@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import logging
 import requests
-import aiohttp
-import aiofiles
+import aiohttp  # type: ignore
+import aiofiles  # type: ignore
 from packaging.version import Version
 from pathlib import Path
 import hashlib
