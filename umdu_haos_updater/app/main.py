@@ -18,6 +18,7 @@ from .supervisor_api import (
 from .notification_service import NotificationService
 from .orchestrator import UpdateOrchestrator
 import requests
+from .profiling import start_profiling
 
 
 logging.basicConfig(
@@ -140,9 +141,21 @@ async def main() -> None:
     logger.info("Запуск UMDU HAOS Updater (Python edition)…")
 
     cfg = AddonConfig.load()
+
     if cfg.debug:
-        logging.getLogger().setLevel(logging.DEBUG)  # root logger
+        logging.getLogger().setLevel(logging.DEBUG)
         logger.debug("DEBUG mode включён")
+
+    # -----------------------------------------------------
+    # Optional profiling (ENV var or cfg.debug)
+    # -----------------------------------------------------
+    should_profile = (
+        os.getenv("PROFILE", "0") == "1"
+        or os.getenv("UMDU_PROFILE", "0") == "1"
+        or cfg.debug
+    )
+    stop_profiling = start_profiling(enabled=should_profile)
+
     logger.info(
         "Настройки: interval=%s auto_update=%s", cfg.update_check_interval, cfg.auto_update
     )
@@ -190,6 +203,10 @@ async def main() -> None:
                 # Состояние опубликует следующий auto_cycle_once()
 
         await asyncio.sleep(cfg.update_check_interval)
+
+    # В теории мы сюда не доходим, но при любом выходе гарантируем
+    # корректное завершение профилировщика.
+    stop_profiling()
 
 
 # ---------------------------------------------------------------------------
