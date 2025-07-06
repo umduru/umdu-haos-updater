@@ -48,7 +48,7 @@ class MqttService:
     def __init__(
         self,
         host: str,
-        port: int,
+        port: int | str,
         username: str | None = None,
         password: str | None = None,
         discovery: bool = True,
@@ -56,7 +56,10 @@ class MqttService:
         connection_event: Optional[asyncio.Event] = None,
     ) -> None:
         self.host = host
-        self.port = int(port)
+        try:
+            self.port = int(port)
+        except (TypeError, ValueError):
+            raise ValueError(f"Invalid port value: {port}") from None
         self.discovery_enabled = discovery
         self.on_install_cmd = on_install_cmd
         self.connection_event = connection_event
