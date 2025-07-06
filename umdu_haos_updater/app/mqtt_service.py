@@ -3,11 +3,11 @@ from __future__ import annotations
 import json
 import logging
 import threading
-from typing import Callable, Optional, Any
+from typing import Callable, Optional, Any, Protocol, TypeVar
 import time
 import asyncio
 
-import paho.mqtt.client as mqtt
+import paho.mqtt.client as mqtt  # type: ignore
 from paho.mqtt.client import Client as MqttClient
 
 logger = logging.getLogger(__name__)
@@ -22,21 +22,41 @@ UPDATE_AVAIL_TOPIC = "umdu/haos_updater/availability"
 UPDATE_DISC_TOPIC = "homeassistant/update/umdu_haos_k1/config"
 
 
+# -----------------------------------------------------------------------------
+# Type aliases / Protocols
+# -----------------------------------------------------------------------------
+
+
+_T_contra = TypeVar("_T_contra", bound=Callable[..., Any], contravariant=True)
+
+
+class InstallCallback(Protocol[_T_contra]):
+    """Protocol for install callback used by MqttService.
+
+    The callback is triggered from the network thread and can either perform
+    the installation synchronously or schedule it asynchronously. The return
+    value is ignored by the caller, therefore it is typed as *Any*.
+    """
+
+    def __call__(self) -> Any:  # noqa: D401 – simple callable signature
+        ...
+
+
 class MqttService:
     """MQTT сервис для управления состоянием обновлений и команд."""
 
     def __init__(
         self,
         host: str,
-        port: int = 1883,
+        port: int,
         username: str | None = None,
         password: str | None = None,
         discovery: bool = True,
-        on_install_cmd: Optional[Callable[[], None]] = None,
+        on_install_cmd: Optional[InstallCallback] = None,
         connection_event: Optional[asyncio.Event] = None,
     ) -> None:
         self.host = host
-        self.port = port
+        self.port = int(port)
         self.discovery_enabled = discovery
         self.on_install_cmd = on_install_cmd
         self.connection_event = connection_event
