@@ -10,6 +10,7 @@ import hashlib
 
 from .supervisor_api import get_current_haos_version
 from .errors import DownloadError, NetworkError
+from .cache_utils import ttl_cache
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ class UpdateInfo:
         return SHARE_DIR / self.filename
 
 
+@ttl_cache(ttl=300)
 def fetch_available_update() -> UpdateInfo:
     """Запрашивает на GitHub список доступных версий.
 

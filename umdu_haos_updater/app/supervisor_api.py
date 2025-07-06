@@ -4,9 +4,9 @@ import os
 import logging
 import requests
 import aiohttp
-import asyncio
 
 from .errors import SupervisorError, NetworkError
+from .cache_utils import ttl_cache
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,7 @@ def _headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {TOKEN}"}
 
 
+@ttl_cache(ttl=300)
 def get_current_haos_version() -> str:
     """Возвращает установленную версию HAOS или бросает SupervisorError."""
     try:
@@ -33,6 +34,7 @@ def get_current_haos_version() -> str:
         raise SupervisorError("Invalid response from /os/info") from exc
 
 
+@ttl_cache(ttl=300)
 def get_mqtt_service() -> dict[str, str | None]:
     """Возвращает словарь host/port/username/password или бросает SupervisorError."""
     try:
