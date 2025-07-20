@@ -109,7 +109,7 @@ class MqttService:
         
         # Очищаем state и availability топики
         self._publish(STATE_TOPIC, "")
-        self._publish(UPDATE_AVAIL_TOPIC, "")
+
         
         self._update_entity_active = False
         logger.info("MQTT: update entity деактивирован")
