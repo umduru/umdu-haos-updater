@@ -84,7 +84,20 @@ async def try_initialize_mqtt(cfg: AddonConfig, loop: asyncio.AbstractEventLoop,
         return None
 
     try:
+        # Получаем версии до инициализации MQTT
+        from .supervisor_api import get_current_haos_version
+        installed = await loop.run_in_executor(None, get_current_haos_version) or "unknown"
+        
+        try:
+            latest_info = await loop.run_in_executor(None, fetch_available_update)
+            latest = latest_info.version
+            logger.info("Получены версии для MQTT: installed=%s, latest=%s", installed, latest)
+        except Exception as e:
+            logger.warning("Не удалось получить доступную версию: %s", e)
+            latest = installed
+        
         mqtt_service = MqttService(host=host, port=port, username=user, password=passwd, discovery=True)
+        mqtt_service.set_initial_versions(installed, latest)
         mqtt_service.start()
         logger.info("MQTT сервис успешно запущен")
         return mqtt_service
@@ -125,8 +138,6 @@ async def main() -> None:
     if setup_mqtt_handler(mqtt_service):
         await asyncio.sleep(2)
         mqtt_service.clear_retained_messages()
-        # Немедленно публикуем состояние после очистки retained сообщений
-        await loop.run_in_executor(None, orchestrator.publish_initial_state)
 
     mqtt_retry_count = 0
     max_mqtt_retries = 5
@@ -147,7 +158,7 @@ async def main() -> None:
                 mqtt_retry_count = 0  # Сбрасываем счетчик при успешном подключении
                 await asyncio.sleep(2)
                 mqtt_service.clear_retained_messages()
-                # Публикуем начальное состояние после переподключения
+                # Публикуем актуальное состояние после переподключения
                 await loop.run_in_executor(None, orchestrator.publish_initial_state)
             elif mqtt_retry_count >= max_mqtt_retries:
                 logger.warning("Достигнуто максимальное количество попыток подключения к MQTT (%d). Продолжаем работу без MQTT.", max_mqtt_retries)

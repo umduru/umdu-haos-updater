@@ -50,6 +50,7 @@ class MqttService:
         self._lock = threading.Lock()
         self._connected = False
         self._update_entity_active: bool = True
+        self._initial_versions: tuple[str, str] | None = None
 
     def start(self) -> None:
         """Запускает MQTT клиент."""
@@ -85,6 +86,11 @@ class MqttService:
         if not self._is_ready():
             return
         self._publish(UPDATE_AVAIL_TOPIC, "online" if online else "offline")
+    
+    def set_initial_versions(self, installed: str, latest: str) -> None:
+        """Устанавливает начальные версии для публикации при подключении."""
+        self._initial_versions = (installed, latest)
+        logger.debug("MQTT: установлены начальные версии: installed=%s, latest=%s", installed, latest)
 
     def clear_retained_messages(self) -> None:
         """Очищает retain-сообщения для state топиков."""
@@ -125,8 +131,6 @@ class MqttService:
 
         if self.discovery_enabled:
             self._publish_discovery()
-            if self._update_entity_active:
-                self.publish_update_availability(True)
 
     def _on_disconnect(self, client, userdata, rc):  # noqa: D401
         with self._lock:
@@ -167,6 +171,15 @@ class MqttService:
                 "platform": "update"
             }
             self._publish(UPDATE_DISC_TOPIC, json.dumps(update_config))
+            
+            # Публикуем availability
+            self.publish_update_availability(True)
+            
+            # Если есть начальные версии, сразу публикуем состояние
+            if self._initial_versions:
+                installed, latest = self._initial_versions
+                logger.info("MQTT: публикация начального состояния: installed=%s, latest=%s", installed, latest)
+                self.publish_update_state(installed, latest, False)
 
     def _publish(self, topic: str, payload: str):
         """Внутренний метод для публикации с retain=True."""
