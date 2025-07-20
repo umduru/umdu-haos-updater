@@ -104,13 +104,7 @@ class MqttService:
         
         logger.info("MQTT: деактивация update entity")
         
-        # Очищаем discovery конфигурацию
-        self._publish(UPDATE_DISC_TOPIC, "")
-        
-        # Очищаем state топик
-        self._publish(STATE_TOPIC, "")
-        
-        # Устанавливаем availability в offline
+        # Устанавливаем availability в offline (entity остается в HA, но показывается как недоступный)
         self._publish(UPDATE_AVAIL_TOPIC, "offline")
         
         self._update_entity_active = False
