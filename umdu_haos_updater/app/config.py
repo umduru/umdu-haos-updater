@@ -1,10 +1,5 @@
 import json
-import os
 from pathlib import Path
-from dataclasses import dataclass
-
-
-CONFIG_PATH = Path("/data/options.json")
 
 
 class AddonConfig:
@@ -30,7 +25,7 @@ class AddonConfig:
         self.mqtt_port = mqtt_config.get("port", 1883)
         self.mqtt_username = mqtt_config.get("username", "")
         self.mqtt_password = mqtt_config.get("password", "")
-        self.mqtt_enabled = options.get("mqtt_enabled", True)  # По умолчанию включен
+
 
         self._validate_config()
 

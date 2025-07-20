@@ -4,7 +4,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, mock_open
 
-from umdu_haos_updater.app.config import AddonConfig, CONFIG_PATH
+from umdu_haos_updater.app.config import AddonConfig
 
 
 class TestAddonConfig:
