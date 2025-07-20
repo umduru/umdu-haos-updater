@@ -5,11 +5,12 @@ import requests
 from packaging.version import Version
 from pathlib import Path
 import hashlib
+from contextlib import contextmanager
 
 from .supervisor_api import get_current_haos_version
 from .errors import DownloadError, NetworkError
 
-logger = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__name__)
 
 GITHUB_VERSIONS_URL = "https://raw.githubusercontent.com/umduru/umdu-haos-updater/main/versions.json"
 RELEASE_BASE_TEMPLATE = "https://github.com/umduru/umdu-haos-updater/releases/download/{ver}"
@@ -37,7 +38,7 @@ class UpdateInfo:
 
 def _handle_request_error(e: Exception, context: str) -> None:
     """Общая обработка ошибок HTTP-запросов."""
-    logger.exception("Не удалось %s", context)
+    _LOGGER.exception("Не удалось %s", context)
     if isinstance(e, requests.RequestException):
         raise NetworkError(f"Failed to {context}") from e
     raise DownloadError(f"Error {context}") from e
@@ -71,18 +72,28 @@ def _set_progress_status(orchestrator, in_progress: bool, version: str) -> None:
         orchestrator.publish_state(latest=version)
 
 
+@contextmanager
+def _download_progress(orchestrator, version: str):
+    """Контекст-менеджер для управления статусом прогресса загрузки."""
+    _set_progress_status(orchestrator, True, version)
+    try:
+        yield
+    finally:
+        _set_progress_status(orchestrator, False, version)
+
+
 def download_update(info: UpdateInfo, orchestrator=None) -> Path:
     path = info.download_path
 
     if path.exists():
         if info.sha256:
             if _verify_sha256(path, info.sha256):
-                logger.info("Файл обновления уже существует и валиден: %s", path)
+                _LOGGER.info("Файл обновления уже существует и валиден: %s", path)
                 return path
-            logger.warning("Файл существует но хэш не совпадает, перезагружаем: %s", path)
+            _LOGGER.warning("Файл существует но хэш не совпадает, перезагружаем: %s", path)
             path.unlink(missing_ok=True)
         else:
-            logger.info("Файл обновления уже существует: %s", path)
+            _LOGGER.info("Файл обновления уже существует: %s", path)
             return path
 
     # Очистка старых бандлов
@@ -90,27 +101,22 @@ def download_update(info: UpdateInfo, orchestrator=None) -> Path:
         if p.name != path.name:
             p.unlink(missing_ok=True)
 
-    _set_progress_status(orchestrator, True, info.version)
+    _LOGGER.info("Загрузка обновления %s", info.url)
+    with _download_progress(orchestrator, info.version):
+        try:
+            with requests.get(info.url, stream=True, timeout=30) as r:
+                r.raise_for_status()
+                with open(path, "wb") as fw:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        fw.write(chunk)
+        except Exception as e:
+            _handle_request_error(e, "загрузки бандла")
 
-    logger.info("Загрузка обновления %s", info.url)
-    try:
-        with requests.get(info.url, stream=True, timeout=30) as r:
-            r.raise_for_status()
-            with open(path, "wb") as fw:
-                for chunk in r.iter_content(chunk_size=8192):
-                    fw.write(chunk)
-    except Exception as e:
-        _set_progress_status(orchestrator, False, info.version)
-        _handle_request_error(e, "загрузки бандла")
-
-    if info.sha256 and not _verify_sha256(path, info.sha256):
-        logger.error("Хэш-сумма не совпала для %s", path)
-        path.unlink(missing_ok=True)
-        _set_progress_status(orchestrator, False, info.version)
-        raise DownloadError("SHA256 mismatch after download")
-    
-    _set_progress_status(orchestrator, False, info.version)
-    logger.info("Файл обновления сохранён: %s", path)
+        if info.sha256 and not _verify_sha256(path, info.sha256):
+            _LOGGER.error("Хэш-сумма не совпала для %s", path)
+            path.unlink(missing_ok=True)
+            raise DownloadError("SHA256 mismatch after download")
+    _LOGGER.info("Файл обновления сохранён: %s", path)
     return path
 
 
@@ -125,23 +131,23 @@ def _verify_sha256(path: Path, expected: str) -> bool:
 def check_for_update_and_download(auto_download: bool = False, orchestrator=None) -> Path | None:
     current = get_current_haos_version()
     if not current:
-        logger.warning("Не удалось определить установленную версию")
+        _LOGGER.warning("Не удалось определить установленную версию")
         return None
 
     try:
         avail = fetch_available_update()
     except NetworkError:
-        logger.info("Не удалось получить информацию об обновлении")
+        _LOGGER.info("Не удалось получить информацию об обновлении")
         return None
 
-    logger.info("Текущая версия: %s; доступная: %s", current, avail.version)
+    _LOGGER.info("Текущая версия: %s; доступная: %s", current, avail.version)
     if is_newer(avail.version, current):
-        logger.info("Найдена новая версия %s", avail.version)
+        _LOGGER.info("Найдена новая версия %s", avail.version)
         if auto_download:
             try:
                 return download_update(avail, orchestrator)
             except DownloadError as e:
-                logger.error("Скачивание обновления не удалось: %s", e)
+                _LOGGER.error("Скачивание обновления не удалось: %s", e)
     else:
-        logger.info("Система актуальна")
+        _LOGGER.info("Система актуальна")
     return None

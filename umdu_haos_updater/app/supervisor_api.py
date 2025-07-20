@@ -6,12 +6,12 @@ import requests
 
 from .errors import SupervisorError, NetworkError
 
-logger = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__name__)
 
 SUPERVISOR_URL = "http://supervisor"
 TOKEN = os.getenv("SUPERVISOR_TOKEN")
 if not TOKEN:
-    logger.error(
+    _LOGGER.error(
         "SUPERVISOR_TOKEN не найден в переменных окружения — скрипт не сможет обращаться к API."
     )
 
@@ -28,16 +28,16 @@ def _supervisor_request(endpoint: str, error_context: str) -> dict:
         return response.json()
     except requests.HTTPError as e:
         if endpoint == "/services/mqtt" and e.response.status_code == 400:
-            logger.debug("MQTT сервис еще не готов (400 Bad Request) - это нормально при старте системы")
+            _LOGGER.debug("MQTT сервис еще не готов (400 Bad Request) - это нормально при старте системы")
             raise NetworkError("MQTT service not ready yet") from e
         else:
-            logger.error("HTTP ошибка %s: %s", error_context, e)
+            _LOGGER.error("HTTP ошибка %s: %s", error_context, e)
             raise NetworkError(f"Failed to {error_context}") from e
     except requests.RequestException as e:
-        logger.error("Ошибка %s: %s", error_context, e)
+        _LOGGER.error("Ошибка %s: %s", error_context, e)
         raise NetworkError(f"Failed to {error_context}") from e
     except Exception as e:
-        logger.error("Неожиданная ошибка %s: %s", error_context, e)
+        _LOGGER.error("Неожиданная ошибка %s: %s", error_context, e)
         raise SupervisorError(f"Unexpected error {error_context}") from e
 
 

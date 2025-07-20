@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .errors import InstallError
 
-logger = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__name__)
 
 
 def _ensure_share_link() -> None:
@@ -16,9 +16,9 @@ def _ensure_share_link() -> None:
         try:
             share_link.parent.mkdir(parents=True, exist_ok=True)
             share_link.symlink_to("/share")
-            logger.info("Создана символическая ссылка %s -> /share", share_link)
+            _LOGGER.info("Создана символическая ссылка %s -> /share", share_link)
         except Exception as e:
-            logger.warning("Не удалось создать символическую ссылку: %s", e)
+            _LOGGER.warning("Не удалось создать символическую ссылку: %s", e)
 
 
 def _run_rauc_install(host_bundle_path: str) -> None:
@@ -35,7 +35,7 @@ def _run_rauc_install(host_bundle_path: str) -> None:
             for line in process.stdout:
                 line = line.strip()
                 if line:
-                    logger.info("RAUC: %s", line)
+                    _LOGGER.info("RAUC: %s", line)
 
         return_code = process.wait()
         if return_code != 0:
@@ -55,9 +55,9 @@ def install_bundle(bundle_path: Path) -> bool:
     _ensure_share_link()
 
     host_bundle_path = str(bundle_path).replace("/share/", "/mnt/data/supervisor/share/")
-    logger.info("Установка бандла: %s", host_bundle_path)
+    _LOGGER.info("Установка бандла: %s", host_bundle_path)
 
     _run_rauc_install(host_bundle_path)
     
-    logger.info("Установка бандла завершена успешно")
+    _LOGGER.info("Установка бандла завершена успешно")
     return True
