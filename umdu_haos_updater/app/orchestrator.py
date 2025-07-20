@@ -59,6 +59,13 @@ class UpdateOrchestrator:
         except Exception as e:
             _LOGGER.warning("Ошибка %s MQTT: %s", operation_name, e)
 
+    def _publish_update_state(self, installed: str, latest: str, in_progress: bool = False) -> None:
+        """Публикует состояние обновления через MQTT безопасно."""
+        self._safe_mqtt_operation(
+            "публикации состояния",
+            lambda: self._mqtt_service.publish_update_state(installed, latest, in_progress)
+        )
+
     def publish_state(self, installed: str | None = None, latest: str | None = None, in_progress: bool | None = None) -> None:
         """Публикует текущее состояние в MQTT."""
         if not self.is_mqtt_ready():
@@ -66,11 +73,7 @@ class UpdateOrchestrator:
 
         installed, latest = self.get_versions(installed, latest)
         current_in_progress = self._in_progress if in_progress is None else in_progress
-
-        self._safe_mqtt_operation(
-            "публикации состояния",
-            lambda: self._mqtt_service.publish_update_state(installed, latest, current_in_progress)
-        )
+        self._publish_update_state(installed, latest, current_in_progress)
 
 
 

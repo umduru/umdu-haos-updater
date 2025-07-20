@@ -146,13 +146,28 @@ class MqttService:
         _LOGGER.debug("MQTT: message %s %s", topic, payload)
 
         if topic == COMMAND_TOPIC:
-            if payload == "install" and self.on_install_cmd:
-                _LOGGER.info("MQTT: received install command")
-                self.on_install_cmd()
-            elif payload == "clear" and self._connected:
-                _LOGGER.info("MQTT: received clear command - очистка retain-сообщений")
-                self.clear_retained_messages()
-                self._publish_discovery()
+            self._handle_command(payload)
+
+    def _handle_command(self, payload: str):
+        """Обрабатывает команды, полученные через MQTT."""
+        commands = {
+            "install": self._handle_install,
+            "clear": self._handle_clear
+        }
+        handler = commands.get(payload)
+        if handler:
+            handler()
+
+    def _handle_install(self):
+        if self.on_install_cmd:
+            _LOGGER.info("MQTT: received install command")
+            self.on_install_cmd()
+
+    def _handle_clear(self):
+        if self._connected:
+            _LOGGER.info("MQTT: received clear command - очистка retain-сообщений")
+            self.clear_retained_messages()
+            self._publish_discovery()
 
     def _publish_discovery(self):
         """Публикует конфигурацию для Home Assistant discovery."""
