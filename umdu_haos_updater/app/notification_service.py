@@ -15,34 +15,29 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class NotificationService:
-    """Отправка persistent_notification.* в Home Assistant."""
+    """Сервис для отправки уведомлений в Home Assistant."""
 
-    def __init__(self, enabled: bool = True, timeout: float = 5.0) -> None:
-        self._enabled = enabled
-        self._timeout = timeout
+    def __init__(self, enabled: bool = True):
+        self.enabled = enabled
 
-    @property
-    def enabled(self) -> bool:  # noqa: D401
-        return self._enabled
+    def send_notification(self, title: str, message: str) -> bool:
+        """Отправляет уведомление в Home Assistant."""
+        if not self.enabled:
+            _LOGGER.debug("Уведомления отключены")
+            return False
 
-    def send(self, title: str, message: str) -> None:  # noqa: D401
-        """Отправляет уведомление; молча игнорирует ошибки сети."""
-        if not self._enabled:
-            _LOGGER.debug("Notifications disabled: %s — %s", title, message)
-            return
-
-        payload: dict[str, Any] = {"title": title, "message": message}
         try:
-            r = requests.post(
-                f"{SUPERVISOR_URL}/core/api/services/persistent_notification/create",
-                headers={"Authorization": f"Bearer {TOKEN}"},
-                json=payload,
-                timeout=self._timeout,
-            )
-            r.raise_for_status()
-            _LOGGER.info("HA notification sent: %s", title)
-        except Exception as exc:  # noqa: BLE001
-            _LOGGER.warning("Failed to send HA notification: %s", exc)
+            url = f"{SUPERVISOR_URL}/core/api/services/persistent_notification/create"
+            headers = {"Authorization": f"Bearer {TOKEN}"}
+            data = {"title": title, "message": message}
+
+            response = requests.post(url, json=data, headers=headers, timeout=10)
+            response.raise_for_status()
+            _LOGGER.info("Уведомление отправлено: %s", title)
+            return True
+        except Exception as e:
+            _LOGGER.error("Ошибка отправки уведомления: %s", e)
+            return False
 
 
 # -----------------------------------------------------------------------------
@@ -50,24 +45,9 @@ class NotificationService:
 # -----------------------------------------------------------------------------
 
 
-def reboot_required_message(version: str | None = None) -> str:
-    """Возвращает текст уведомления о необходимости перезагрузки.
-
-    Если передана *version*, она добавляется к сообщению.
-    """
-
-    header = (
-        f"✅ Обновление до версии {version} установлено успешно!"
-        if version
-        else "✅ Обновление установлено успешно!"
-    )
-
+def reboot_required_message(version: str) -> str:
+    """Формирует сообщение о необходимости перезагрузки."""
     return (
-        f"{header}\n"
-        "🔄 Требуется перезагрузка системы для применения изменений.\n\n"
-        "**Для перезагрузки системы:**\n"
-        "1. Перейдите в **Режим разработчика** (Developer Tools)\n"
-        "2. Выберите **Перезапустить** (Restart)\n"
-        "3. Нажмите **Дополнительные опции** (Advanced Options)\n"
-        "4. Нажмите **Перезапустить систему** (Restart System)"
-    ) 
+        f"Обновление HAOS до версии {version} установлено успешно. "
+        "Для завершения обновления требуется перезагрузка системы."
+    )

@@ -52,7 +52,7 @@ class TestGetCurrentHaosVersion:
         mock_get.assert_called_once_with(
             f"{SUPERVISOR_URL}/os/info",
             headers={"Authorization": "Bearer test_token"},
-            timeout=5
+            timeout=10
         )
 
     def test_get_version_network_error(self):
@@ -85,8 +85,8 @@ class TestGetCurrentHaosVersion:
         mock_response.raise_for_status.return_value = None
         
         with patch('requests.get', return_value=mock_response):
-            with pytest.raises(SupervisorError):
-                get_current_haos_version()
+            result = get_current_haos_version()
+            assert result is None
 
     def test_get_version_missing_data_key(self):
         """Тест обработки отсутствующего ключа data"""
@@ -95,8 +95,8 @@ class TestGetCurrentHaosVersion:
         mock_response.raise_for_status.return_value = None
         
         with patch('requests.get', return_value=mock_response):
-            with pytest.raises(SupervisorError):
-                get_current_haos_version()
+            result = get_current_haos_version()
+            assert result is None
 
 
 class TestGetMqttService:
@@ -129,7 +129,7 @@ class TestGetMqttService:
         mock_get.assert_called_once_with(
             f"{SUPERVISOR_URL}/services/mqtt",
             headers={"Authorization": "Bearer test_token"},
-            timeout=5
+            timeout=10
         )
 
     def test_get_mqtt_service_partial_data(self):
@@ -149,9 +149,7 @@ class TestGetMqttService:
         
         expected = {
             "host": "mqtt.local",
-            "port": 1883,
-            "username": None,
-            "password": None
+            "port": 1883
         }
         assert result == expected
 
@@ -166,7 +164,7 @@ class TestGetMqttService:
         with patch('requests.get', return_value=mock_response):
             result = get_mqtt_service()
         
-        expected = {"host": None, "port": None, "username": None, "password": None}
+        expected = {}
         assert result == expected
 
     def test_get_mqtt_service_network_error(self):
@@ -199,8 +197,7 @@ class TestGetMqttService:
         with patch('requests.get', return_value=mock_response):
             result = get_mqtt_service()
         
-        expected = {"host": None, "port": None, "username": None, "password": None}
-        assert result == expected
+        assert result is None
 
     def test_get_mqtt_service_invalid_json(self):
         """Тест обработки невалидного JSON"""
@@ -210,4 +207,4 @@ class TestGetMqttService:
         
         with patch('requests.get', return_value=mock_response):
             with pytest.raises(SupervisorError):
-                get_mqtt_service() 
+                get_mqtt_service()

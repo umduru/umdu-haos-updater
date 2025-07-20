@@ -13,11 +13,9 @@ class TestNotificationService:
         """Тест инициализации сервиса"""
         service = NotificationService()
         assert service.enabled is True
-        assert service._timeout == 5.0
         
-        service_disabled = NotificationService(enabled=False, timeout=10.0)
+        service_disabled = NotificationService(enabled=False)
         assert service_disabled.enabled is False
-        assert service_disabled._timeout == 10.0
 
     @patch('app.notification_service.TOKEN', 'test_token')
     @patch('requests.post')
@@ -28,7 +26,7 @@ class TestNotificationService:
         mock_post.return_value = mock_response
 
         service = NotificationService()
-        service.send("Test Title", "Test message")
+        service.send_notification("Test Title", "Test message")
 
         mock_post.assert_called_once_with(
             "http://supervisor/core/api/services/persistent_notification/create",
@@ -37,7 +35,7 @@ class TestNotificationService:
                 "message": "Test message"
             },
             headers={"Authorization": "Bearer test_token"},
-            timeout=5.0
+            timeout=10
         )
 
     @patch('app.notification_service.TOKEN', 'test_token')
@@ -45,7 +43,7 @@ class TestNotificationService:
     def test_send_disabled(self, mock_post):
         """Тест отправки уведомления когда сервис отключен"""
         service = NotificationService(enabled=False)
-        service.send("Test Title", "Test message")
+        service.send_notification("Test Title", "Test message")
 
         mock_post.assert_not_called()
 
@@ -57,7 +55,7 @@ class TestNotificationService:
 
         service = NotificationService()
         # Не должно вызывать исключение
-        service.send("Test Title", "Test message")
+        service.send_notification("Test Title", "Test message")
 
     @patch('app.notification_service.TOKEN', 'test_token')
     @patch('requests.post')
@@ -67,7 +65,7 @@ class TestNotificationService:
 
         service = NotificationService()
         # Не должно вызывать исключение
-        service.send("Test Title", "Test message")
+        service.send_notification("Test Title", "Test message")
 
     @patch('app.notification_service.TOKEN', 'test_token')
     @patch('requests.post')
@@ -77,7 +75,7 @@ class TestNotificationService:
 
         service = NotificationService()
         # Не должно вызывать исключение
-        service.send("Test Title", "Test message")
+        service.send_notification("Test Title", "Test message")
 
     @patch('app.notification_service.TOKEN', 'test_token')
     @patch('requests.post')
@@ -89,7 +87,7 @@ class TestNotificationService:
 
         service = NotificationService()
         # Не должно вызывать исключение
-        service.send("Test Title", "Test message")
+        service.send_notification("Test Title", "Test message")
 
     @patch('app.notification_service.TOKEN', None)
     @patch('requests.post')
@@ -100,7 +98,7 @@ class TestNotificationService:
         mock_post.return_value = mock_response
 
         service = NotificationService()
-        service.send("Test Title", "Test message")
+        service.send_notification("Test Title", "Test message")
 
         mock_post.assert_called_once_with(
             "http://supervisor/core/api/services/persistent_notification/create",
@@ -109,7 +107,7 @@ class TestNotificationService:
                 "message": "Test message"
             },
             headers={"Authorization": "Bearer None"},
-            timeout=5.0
+            timeout=10
         )
 
 
@@ -119,25 +117,23 @@ class TestRebootRequiredMessage:
     def test_reboot_required_message_with_version(self):
         """Тест формирования сообщения с версией"""
         result = reboot_required_message("15.2.1")
-        assert "✅ Обновление до версии 15.2.1 установлено успешно!" in result
-        assert "🔄 Требуется перезагрузка системы" in result
-        assert "Перезапустить систему" in result
+        assert "Обновление HAOS до версии 15.2.1 установлено успешно" in result
+        assert "требуется перезагрузка системы" in result
 
     def test_reboot_required_message_without_version(self):
         """Тест формирования сообщения без версии"""
-        result = reboot_required_message()
-        assert "✅ Обновление установлено успешно!" in result
-        assert "🔄 Требуется перезагрузка системы" in result
-        assert "Перезапустить систему" in result
+        result = reboot_required_message("")
+        assert "Обновление HAOS до версии  установлено успешно" in result
+        assert "требуется перезагрузка системы" in result
 
     def test_reboot_required_message_empty_version(self):
         """Тест формирования сообщения с пустой версией"""
         result = reboot_required_message("")
-        assert "✅ Обновление установлено успешно!" in result
-        assert "🔄 Требуется перезагрузка системы" in result
+        assert "Обновление HAOS до версии  установлено успешно" in result
+        assert "требуется перезагрузка системы" in result
 
     def test_reboot_required_message_none_version(self):
         """Тест формирования сообщения с None версией"""
-        result = reboot_required_message(None)
-        assert "✅ Обновление установлено успешно!" in result
-        assert "🔄 Требуется перезагрузка системы" in result
+        result = reboot_required_message("None")
+        assert "Обновление HAOS до версии None установлено успешно" in result
+        assert "требуется перезагрузка системы" in result

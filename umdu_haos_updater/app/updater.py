@@ -36,11 +36,7 @@ class UpdateInfo:
 
 
 def fetch_available_update() -> UpdateInfo:
-    """Запрашивает на GitHub список доступных версий.
-
-    Возвращает объект :class:`UpdateInfo`.
-    При сетевых проблемах или ошибке формата поднимает :class:`NetworkError`.
-    """
+    """Запрашивает доступные версии с GitHub."""
     try:
         r = requests.get(GITHUB_VERSIONS_URL, timeout=5)
         r.raise_for_status()
@@ -58,22 +54,19 @@ def is_newer(ver_a: str, ver_b: str) -> bool:
     try:
         return Version(ver_a) > Version(ver_b)
     except Exception:
-        # fallback — сравнение строк
         return ver_a != ver_b and ver_a > ver_b
 
 
 def download_update(info: UpdateInfo) -> Path:
     path = info.download_path
 
-    # Проверяем, если файл уже существует и валиден
     if path.exists():
         if info.sha256:
             if _verify_sha256(path, info.sha256):
                 logger.info("Файл обновления уже существует и валиден: %s", path)
                 return path
-            else:
-                logger.warning("Файл существует но хэш не совпадает, перезагружаем: %s", path)
-                path.unlink(missing_ok=True)
+            logger.warning("Файл существует но хэш не совпадает, перезагружаем: %s", path)
+            path.unlink(missing_ok=True)
         else:
             logger.info("Файл обновления уже существует: %s", path)
             return path
@@ -83,7 +76,7 @@ def download_update(info: UpdateInfo) -> Path:
         if p.name != path.name:
             p.unlink(missing_ok=True)
 
-    logger.info("Загрузка обновления %s …", info.url)
+    logger.info("Загрузка обновления %s", info.url)
     try:
         with requests.get(info.url, stream=True, timeout=30) as r:
             r.raise_for_status()
@@ -94,11 +87,11 @@ def download_update(info: UpdateInfo) -> Path:
         logger.exception("Ошибка загрузки бандла")
         raise DownloadError("Error downloading update bundle") from e
 
-    if info.sha256:
-        if not _verify_sha256(path, info.sha256):
-            logger.error("Хэш-сумма не совпала для %s", path)
-            path.unlink(missing_ok=True)
-            raise DownloadError("SHA256 mismatch after download")
+    if info.sha256 and not _verify_sha256(path, info.sha256):
+        logger.error("Хэш-сумма не совпала для %s", path)
+        path.unlink(missing_ok=True)
+        raise DownloadError("SHA256 mismatch after download")
+    
     logger.info("Файл обновления сохранён: %s", path)
     return path
 
@@ -114,7 +107,7 @@ def _verify_sha256(path: Path, expected: str) -> bool:
 def check_for_update_and_download(auto_download: bool = False) -> Path | None:
     current = get_current_haos_version()
     if not current:
-        logger.warning("Не удалось определить установленную версию — пропускаем проверку")
+        logger.warning("Не удалось определить установленную версию")
         return None
 
     try:
@@ -131,7 +124,6 @@ def check_for_update_and_download(auto_download: bool = False) -> Path | None:
                 return download_update(avail)
             except DownloadError as e:
                 logger.error("Скачивание обновления не удалось: %s", e)
-                return None
     else:
         logger.info("Система актуальна")
-    return None 
+    return None

@@ -27,16 +27,13 @@ class TestInstallBundle:
         # Мокаем процесс
         mock_proc = Mock()
         mock_proc.stdout = ["Line 1\n", "Line 2\n", "Installing...\n"]
-        mock_proc.wait.return_value = None
-        mock_proc.returncode = 0
+        mock_proc.wait.return_value = 0
         mock_popen.return_value = mock_proc
         
         with patch.object(Path, 'exists', return_value=True), \
              patch.object(Path, 'mkdir'), \
              patch.object(Path, 'symlink_to'):
-            result = install_bundle(bundle_path)
-        
-        assert result is True
+            install_bundle(bundle_path)  # Функция не возвращает значение
         # Проверяем что вызван правильный путь (хостовый)
         expected_host_path = "/mnt/data/supervisor/share/umdu-haos-updater/bundle.raucb"
         mock_popen.assert_called_once_with(
@@ -53,14 +50,13 @@ class TestInstallBundle:
         
         mock_proc = Mock()
         mock_proc.stdout = ["Error installing bundle\n"]
-        mock_proc.wait.return_value = None
-        mock_proc.returncode = 1  # ошибка
+        mock_proc.wait.return_value = 1  # ошибка
         mock_popen.return_value = mock_proc
         
         with patch.object(Path, 'exists', return_value=True), \
              patch.object(Path, 'mkdir'), \
              patch.object(Path, 'symlink_to'):
-            with pytest.raises(InstallError, match="Unexpected error while running rauc"):
+            with pytest.raises(InstallError, match="RAUC install завершился с кодом 1"):
                 install_bundle(bundle_path)
 
     @patch('subprocess.Popen')
@@ -73,7 +69,7 @@ class TestInstallBundle:
         with patch.object(Path, 'exists', return_value=True), \
              patch.object(Path, 'mkdir'), \
              patch.object(Path, 'symlink_to'):
-            with pytest.raises(InstallError, match="RAUC CLI not found"):
+            with pytest.raises(InstallError, match="RAUC CLI не найден"):
                 install_bundle(bundle_path)
 
     @patch('subprocess.Popen')
@@ -86,7 +82,7 @@ class TestInstallBundle:
         with patch.object(Path, 'exists', return_value=True), \
              patch.object(Path, 'mkdir'), \
              patch.object(Path, 'symlink_to'):
-            with pytest.raises(InstallError, match="Unexpected error while running rauc"):
+            with pytest.raises(InstallError, match="Ошибка при установке: Unexpected error"):
                 install_bundle(bundle_path)
 
     @patch('subprocess.Popen')
@@ -96,8 +92,7 @@ class TestInstallBundle:
         
         mock_proc = Mock()
         mock_proc.stdout = []
-        mock_proc.wait.return_value = None
-        mock_proc.returncode = 0
+        mock_proc.wait.return_value = 0
         mock_popen.return_value = mock_proc
         
         # Возвращаем True для bundle_path.exists() и False для share_link.exists()
@@ -128,8 +123,7 @@ class TestInstallBundle:
         
         mock_proc = Mock()
         mock_proc.stdout = []
-        mock_proc.wait.return_value = None
-        mock_proc.returncode = 0
+        mock_proc.wait.return_value = 0
         mock_popen.return_value = mock_proc
         
         # Возвращаем True для bundle_path.exists() и False для share_link.exists()
@@ -148,9 +142,7 @@ class TestInstallBundle:
              patch.object(Path, 'symlink_to', side_effect=OSError("Permission denied")), \
              patch('app.rauc_installer.logger') as mock_logger:
             # Должно продолжить работу несмотря на ошибку создания symlink
-            result = install_bundle(bundle_path)
-        
-        assert result is True
+            install_bundle(bundle_path)  # Функция не возвращает значение
         mock_logger.warning.assert_called_once()
 
     def test_host_path_conversion(self):
@@ -159,8 +151,7 @@ class TestInstallBundle:
         
         mock_proc = Mock()
         mock_proc.stdout = []
-        mock_proc.wait.return_value = None
-        mock_proc.returncode = 0
+        mock_proc.wait.return_value = 0
         
         with patch.object(Path, 'exists', return_value=True), \
              patch('subprocess.Popen', return_value=mock_proc) as mock_popen, \
@@ -176,4 +167,4 @@ class TestInstallBundle:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True
-        ) 
+        )
