@@ -125,6 +125,8 @@ async def main() -> None:
     if setup_mqtt_handler(mqtt_service):
         await asyncio.sleep(2)
         mqtt_service.clear_retained_messages()
+        # Немедленно публикуем состояние после очистки retained сообщений
+        await loop.run_in_executor(None, orchestrator.publish_initial_state)
 
     mqtt_retry_count = 0
     max_mqtt_retries = 5
@@ -145,6 +147,8 @@ async def main() -> None:
                 mqtt_retry_count = 0  # Сбрасываем счетчик при успешном подключении
                 await asyncio.sleep(2)
                 mqtt_service.clear_retained_messages()
+                # Публикуем начальное состояние после переподключения
+                await loop.run_in_executor(None, orchestrator.publish_initial_state)
             elif mqtt_retry_count >= max_mqtt_retries:
                 logger.warning("Достигнуто максимальное количество попыток подключения к MQTT (%d). Продолжаем работу без MQTT.", max_mqtt_retries)
                 mqtt_retry_count = 0  # Сбрасываем счетчик для следующего цикла

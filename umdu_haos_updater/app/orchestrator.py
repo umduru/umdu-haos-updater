@@ -47,6 +47,33 @@ class UpdateOrchestrator:
         except Exception as e:
             _LOGGER.warning("Ошибка публикации состояния MQTT: %s", e)
 
+    def publish_initial_state(self) -> None:
+        """Публикует начальное состояние после инициализации MQTT."""
+        if not self._mqtt_service:
+            return
+        
+        _LOGGER.info("Публикация начального состояния MQTT")
+        
+        # Получаем текущую версию
+        installed = get_current_haos_version() or "unknown"
+        
+        # Пытаемся получить доступную версию
+        try:
+            latest = fetch_available_update().version
+            self._latest_version = latest
+            _LOGGER.info("Получена доступная версия: %s", latest)
+        except Exception as e:
+            _LOGGER.warning("Не удалось получить доступную версию при инициализации: %s", e)
+            latest = installed
+            self._latest_version = latest
+        
+        # Публикуем состояние
+        try:
+            self._mqtt_service.publish_update_state(installed, latest, False)
+            _LOGGER.info("Начальное состояние опубликовано: installed=%s, latest=%s", installed, latest)
+        except Exception as e:
+            _LOGGER.warning("Ошибка публикации начального состояния MQTT: %s", e)
+
     def check_and_download(self) -> Path | None:
         """Проверяет и загружает обновление согласно конфигурации."""
         return check_for_update_and_download(auto_download=self._cfg.auto_update, orchestrator=self)
