@@ -35,6 +35,14 @@ class UpdateInfo:
         return SHARE_DIR / self.filename
 
 
+def _handle_request_error(e: Exception, context: str) -> None:
+    """Общая обработка ошибок HTTP-запросов."""
+    logger.exception("Не удалось %s", context)
+    if isinstance(e, requests.RequestException):
+        raise NetworkError(f"Failed to {context}") from e
+    raise DownloadError(f"Error {context}") from e
+
+
 def fetch_available_update() -> UpdateInfo:
     """Запрашивает доступные версии с GitHub."""
     try:
@@ -45,8 +53,7 @@ def fetch_available_update() -> UpdateInfo:
             return UpdateInfo(version=str(data.get("version")), sha256=data.get("sha256"))
         return UpdateInfo(version=str(data))
     except Exception as e:
-        logger.exception("Не удалось получить versions.json")
-        raise NetworkError("Failed to fetch available update info") from e
+        _handle_request_error(e, "получить versions.json")
 
 
 def is_newer(ver_a: str, ver_b: str) -> bool:
@@ -55,6 +62,14 @@ def is_newer(ver_a: str, ver_b: str) -> bool:
         return Version(ver_a) > Version(ver_b)
     except Exception:
         return ver_a != ver_b and ver_a > ver_b
+
+
+def _set_progress_status(orchestrator, in_progress: bool, version: str) -> None:
+    """Устанавливает статус прогресса загрузки."""
+    if orchestrator:
+        orchestrator._in_progress = in_progress
+        orchestrator.publish_state(latest=version)
+        logger.info("Статус in_progress=%s для версии %s", in_progress, version)
 
 
 def download_update(info: UpdateInfo, orchestrator=None) -> Path:
@@ -76,11 +91,7 @@ def download_update(info: UpdateInfo, orchestrator=None) -> Path:
         if p.name != path.name:
             p.unlink(missing_ok=True)
 
-    # Устанавливаем статус in_progress при начале загрузки
-    if orchestrator:
-        orchestrator._in_progress = True
-        orchestrator.publish_state(latest=info.version)
-        logger.info("Установлен статус in_progress=True для загрузки")
+    _set_progress_status(orchestrator, True, info.version)
 
     logger.info("Загрузка обновления %s", info.url)
     try:
@@ -90,29 +101,16 @@ def download_update(info: UpdateInfo, orchestrator=None) -> Path:
                 for chunk in r.iter_content(chunk_size=8192):
                     fw.write(chunk)
     except Exception as e:
-        logger.exception("Ошибка загрузки бандла")
-        # Сбрасываем статус in_progress при ошибке загрузки
-        if orchestrator:
-            orchestrator._in_progress = False
-            orchestrator.publish_state(latest=info.version)
-            logger.info("Сброшен статус in_progress=False после ошибки загрузки")
-        raise DownloadError("Error downloading update bundle") from e
+        _set_progress_status(orchestrator, False, info.version)
+        _handle_request_error(e, "загрузки бандла")
 
     if info.sha256 and not _verify_sha256(path, info.sha256):
         logger.error("Хэш-сумма не совпала для %s", path)
         path.unlink(missing_ok=True)
-        # Сбрасываем статус in_progress при ошибке проверки хэша
-        if orchestrator:
-            orchestrator._in_progress = False
-            orchestrator.publish_state(latest=info.version)
-            logger.info("Сброшен статус in_progress=False после ошибки хэша")
+        _set_progress_status(orchestrator, False, info.version)
         raise DownloadError("SHA256 mismatch after download")
     
-    # Сбрасываем статус in_progress после успешной загрузки
-    if orchestrator:
-        orchestrator._in_progress = False
-        orchestrator.publish_state(latest=info.version)
-        logger.info("Сброшен статус in_progress=False после успешной загрузки")
+    _set_progress_status(orchestrator, False, info.version)
     
     logger.info("Файл обновления сохранён: %s", path)
     return path

@@ -20,28 +20,34 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _get_supervisor_mqtt_params(cfg: AddonConfig) -> tuple[str, int, str | None, str | None]:
+    """Получает параметры MQTT из Supervisor API."""
+    try:
+        sup = get_mqtt_service()
+        if sup and sup.get("host"):
+            return (
+                sup["host"],
+                sup.get("port") or cfg.mqtt_port or 1883,
+                cfg.mqtt_username or sup.get("username"),
+                cfg.mqtt_password or sup.get("password")
+            )
+    except Exception as exc:
+        from .errors import NetworkError
+        if isinstance(exc, NetworkError) and "not ready yet" in str(exc):
+            logger.debug("MQTT сервис еще не готов, будем ждать")
+        else:
+            logger.warning("MQTT params via Supervisor API failed: %s", exc)
+    return cfg.mqtt_host or "core-mosquitto", cfg.mqtt_port or 1883, cfg.mqtt_username, cfg.mqtt_password
+
+
 def build_mqtt_params(cfg: AddonConfig):
     host, port, user, password = cfg.mqtt_host, cfg.mqtt_port or 1883, cfg.mqtt_username, cfg.mqtt_password
 
     # Fallback к Supervisor API если нет учетных данных или используется дефолтный хост
     if not user or not password or host == "core-mosquitto":
-        try:
-            sup = get_mqtt_service()
-            if sup and sup.get("host"):
-                host = sup["host"]
-                port = sup.get("port") or port
-                user = user or sup.get("username")
-                password = password or sup.get("password")
-                logger.debug("Получены параметры MQTT из Supervisor API")
-        except Exception as exc:
-            from .errors import NetworkError
-            if isinstance(exc, NetworkError) and "not ready yet" in str(exc):
-                logger.debug("MQTT сервис еще не готов, будем ждать")
-            else:
-                logger.warning("MQTT params via Supervisor API failed: %s", exc)
-            # Если не удалось получить данные из Supervisor API, используем конфигурацию
-            if not host or host == "core-mosquitto":
-                host = "core-mosquitto"  # Fallback к дефолтному хосту
+        host, port, user, password = _get_supervisor_mqtt_params(cfg)
+        if host != "core-mosquitto":
+            logger.debug("Получены параметры MQTT из Supervisor API")
 
     return host, port, user, password
 
@@ -51,14 +57,18 @@ def build_mqtt_params(cfg: AddonConfig):
 # ------------------------------------------------------------------
 
 
-def handle_install_cmd(orchestrator: UpdateOrchestrator):
-    """Обработчик MQTT-команды install."""
+def _get_latest_version() -> str | None:
+    """Получает последнюю доступную версию."""
     try:
-        latest_version = fetch_available_update().version
+        return fetch_available_update().version
     except Exception as exc:
         logger.debug("fetch_available_update failed: %s", exc)
-        latest_version = None
+        return None
 
+
+def handle_install_cmd(orchestrator: UpdateOrchestrator):
+    """Обработчик MQTT-команды install."""
+    latest_version = _get_latest_version()
     logger.info("MQTT install: установка версии %s", latest_version)
 
     bundle_path = check_for_update_and_download(auto_download=True, orchestrator=orchestrator)
@@ -68,6 +78,22 @@ def handle_install_cmd(orchestrator: UpdateOrchestrator):
         return
 
     orchestrator.run_install(bundle_path, latest_version)
+
+
+async def _get_versions_for_mqtt(loop: asyncio.AbstractEventLoop) -> tuple[str, str]:
+    """Получает версии для инициализации MQTT."""
+    from .supervisor_api import get_current_haos_version
+    installed = await loop.run_in_executor(None, get_current_haos_version) or "unknown"
+    
+    try:
+        latest_info = await loop.run_in_executor(None, fetch_available_update)
+        latest = latest_info.version
+        logger.info("Получены версии для MQTT: installed=%s, latest=%s", installed, latest)
+    except Exception as e:
+        logger.warning("Не удалось получить доступную версию: %s", e)
+        latest = installed
+    
+    return installed, latest
 
 
 async def try_initialize_mqtt(cfg: AddonConfig, loop: asyncio.AbstractEventLoop, retry_delay: int = 0) -> MqttService | None:
@@ -84,17 +110,7 @@ async def try_initialize_mqtt(cfg: AddonConfig, loop: asyncio.AbstractEventLoop,
         return None
 
     try:
-        # Получаем версии до инициализации MQTT
-        from .supervisor_api import get_current_haos_version
-        installed = await loop.run_in_executor(None, get_current_haos_version) or "unknown"
-        
-        try:
-            latest_info = await loop.run_in_executor(None, fetch_available_update)
-            latest = latest_info.version
-            logger.info("Получены версии для MQTT: installed=%s, latest=%s", installed, latest)
-        except Exception as e:
-            logger.warning("Не удалось получить доступную версию: %s", e)
-            latest = installed
+        installed, latest = await _get_versions_for_mqtt(loop)
         
         mqtt_service = MqttService(host=host, port=port, username=user, password=passwd, discovery=True)
         mqtt_service.set_initial_versions(installed, latest)

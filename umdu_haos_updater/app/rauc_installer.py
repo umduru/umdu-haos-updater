@@ -9,11 +9,8 @@ from .errors import InstallError
 logger = logging.getLogger(__name__)
 
 
-def install_bundle(bundle_path: Path) -> bool:
-    """Устанавливает RAUC-бандл."""
-    if not bundle_path.exists():
-        raise InstallError(f"Bundle file not found: {bundle_path}")
-
+def _ensure_share_link() -> None:
+    """Создает символическую ссылку для доступа к /share."""
     share_link = Path("/mnt/data/supervisor/share")
     if not share_link.exists():
         try:
@@ -23,9 +20,9 @@ def install_bundle(bundle_path: Path) -> bool:
         except Exception as e:
             logger.warning("Не удалось создать символическую ссылку: %s", e)
 
-    host_bundle_path = str(bundle_path).replace("/share/", "/mnt/data/supervisor/share/")
-    logger.info("Установка бандла: %s", host_bundle_path)
 
+def _run_rauc_install(host_bundle_path: str) -> None:
+    """Выполняет установку RAUC-бандла."""
     try:
         process = subprocess.Popen(
             ["rauc", "install", host_bundle_path],
@@ -44,9 +41,23 @@ def install_bundle(bundle_path: Path) -> bool:
         if return_code != 0:
             raise InstallError(f"RAUC install завершился с кодом {return_code}")
 
-        logger.info("Установка бандла завершена успешно")
-        return True
     except FileNotFoundError as e:
         raise InstallError("RAUC CLI не найден") from e
     except Exception as e:
         raise InstallError(f"Ошибка при установке: {e}") from e
+
+
+def install_bundle(bundle_path: Path) -> bool:
+    """Устанавливает RAUC-бандл."""
+    if not bundle_path.exists():
+        raise InstallError(f"Bundle file not found: {bundle_path}")
+
+    _ensure_share_link()
+
+    host_bundle_path = str(bundle_path).replace("/share/", "/mnt/data/supervisor/share/")
+    logger.info("Установка бандла: %s", host_bundle_path)
+
+    _run_rauc_install(host_bundle_path)
+    
+    logger.info("Установка бандла завершена успешно")
+    return True

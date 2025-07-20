@@ -22,17 +22,19 @@ class UpdateOrchestrator:
         self._mqtt_service: MqttService | None = None
         self._in_progress: bool = False
         self._latest_version: str | None = None
+        self._installed_version: str | None = None
 
     def set_mqtt_service(self, mqtt_service: MqttService | None) -> None:
         self._mqtt_service = mqtt_service
 
-    def publish_state(self, installed: str | None = None, latest: str | None = None) -> None:
-        """Публикует текущее состояние в MQTT."""
-        if not self._mqtt_service:
-            return
-
+    def _get_versions(self, installed: str | None = None, latest: str | None = None) -> tuple[str, str]:
+        """Получает и кэширует версии системы."""
         if installed is None:
-            installed = get_current_haos_version() or "unknown"
+            if self._installed_version is None:
+                self._installed_version = get_current_haos_version() or "unknown"
+            installed = self._installed_version
+        else:
+            self._installed_version = installed
         
         if latest is not None:
             self._latest_version = latest
@@ -41,9 +43,18 @@ class UpdateOrchestrator:
                 self._latest_version = fetch_available_update().version
             except Exception:
                 self._latest_version = installed
+        
+        return installed, self._latest_version
+
+    def publish_state(self, installed: str | None = None, latest: str | None = None) -> None:
+        """Публикует текущее состояние в MQTT."""
+        if not self._mqtt_service:
+            return
+
+        installed, latest = self._get_versions(installed, latest)
 
         try:
-            self._mqtt_service.publish_update_state(installed, self._latest_version, self._in_progress)
+            self._mqtt_service.publish_update_state(installed, latest, self._in_progress)
         except Exception as e:
             _LOGGER.warning("Ошибка публикации состояния MQTT: %s", e)
 
@@ -54,20 +65,15 @@ class UpdateOrchestrator:
         
         _LOGGER.info("Публикация начального состояния MQTT")
         
-        # Получаем текущую версию
-        installed = get_current_haos_version() or "unknown"
-        
-        # Пытаемся получить доступную версию
         try:
             latest = fetch_available_update().version
-            self._latest_version = latest
             _LOGGER.info("Получена доступная версия: %s", latest)
         except Exception as e:
             _LOGGER.warning("Не удалось получить доступную версию при инициализации: %s", e)
-            latest = installed
-            self._latest_version = latest
+            latest = None
         
-        # Публикуем состояние
+        installed, latest = self._get_versions(latest=latest)
+        
         try:
             self._mqtt_service.publish_update_state(installed, latest, False)
             _LOGGER.info("Начальное состояние опубликовано: installed=%s, latest=%s", installed, latest)
@@ -104,8 +110,7 @@ class UpdateOrchestrator:
         try:
             self._latest_version = fetch_available_update().version
         except Exception:
-            if not self._latest_version:
-                self._latest_version = get_current_haos_version() or "unknown"
+            pass  # Используем кэшированную версию или получим через _get_versions
 
         bundle_path = self.check_and_download()
         if bundle_path and self._cfg.auto_update:
