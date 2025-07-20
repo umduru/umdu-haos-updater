@@ -15,4 +15,13 @@ class InstallError(UpdaterError):
 
 
 class SupervisorError(UpdaterError):
-    """Ошибки взаимодействия с Supervisor API.""" 
+    """Ошибки взаимодействия с Supervisor API."""
+
+
+def handle_request_error(e: Exception, context: str, logger) -> None:
+    """Общая обработка ошибок HTTP-запросов."""
+    import requests
+    logger.exception("Не удалось %s", context)
+    if isinstance(e, requests.RequestException):
+        raise NetworkError(f"Failed to {context}") from e
+    raise DownloadError(f"Error {context}") from e

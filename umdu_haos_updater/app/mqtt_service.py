@@ -5,10 +5,21 @@ import logging
 import threading
 from typing import Callable, Optional
 import time
+from functools import wraps
 
 import paho.mqtt.client as mqtt
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def requires_discovery(func):
+    """Декоратор для методов, требующих включенного discovery."""
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if not self.discovery_enabled:
+            return
+        return func(self, *args, **kwargs)
+    return wrapper
 
 
 # MQTT Topics
@@ -91,20 +102,16 @@ class MqttService:
         self._initial_versions = (installed, latest)
         _LOGGER.debug("MQTT: установлены начальные версии: installed=%s, latest=%s", installed, latest)
 
+    @requires_discovery
     def clear_retained_messages(self) -> None:
         """Очищает retain-сообщения для state топиков."""
-        if not self.discovery_enabled:
-            return
-        
         for topic in [STATE_TOPIC, UPDATE_AVAIL_TOPIC]:
             _LOGGER.info("MQTT: очистка retain-сообщения для %s", topic)
             self._client.publish(topic, "", retain=True)
 
+    @requires_discovery
     def deactivate_update_entity(self) -> None:
         """Деактивирует update entity."""
-        if not self.discovery_enabled:
-            return
-        
         _LOGGER.info("MQTT: деактивация update entity")
         
         # Устанавливаем availability в offline (entity остается в HA, но показывается как недоступный)

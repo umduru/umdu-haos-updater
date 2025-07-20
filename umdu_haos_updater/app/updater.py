@@ -8,7 +8,7 @@ import hashlib
 from contextlib import contextmanager
 
 from .supervisor_api import get_current_haos_version
-from .errors import DownloadError, NetworkError
+from .errors import DownloadError, NetworkError, handle_request_error
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,12 +36,7 @@ class UpdateInfo:
         return SHARE_DIR / self.filename
 
 
-def _handle_request_error(e: Exception, context: str) -> None:
-    """Общая обработка ошибок HTTP-запросов."""
-    _LOGGER.exception("Не удалось %s", context)
-    if isinstance(e, requests.RequestException):
-        raise NetworkError(f"Failed to {context}") from e
-    raise DownloadError(f"Error {context}") from e
+
 
 
 def fetch_available_update() -> UpdateInfo:
@@ -54,7 +49,7 @@ def fetch_available_update() -> UpdateInfo:
             return UpdateInfo(version=str(data.get("version")), sha256=data.get("sha256"))
         return UpdateInfo(version=str(data))
     except Exception as e:
-        _handle_request_error(e, "получить versions.json")
+        handle_request_error(e, "получить versions.json", _LOGGER)
 
 
 def is_newer(ver_a: str, ver_b: str) -> bool:
@@ -107,7 +102,7 @@ def download_update(info: UpdateInfo, orchestrator=None) -> Path:
                     for chunk in r.iter_content(chunk_size=8192):
                         fw.write(chunk)
         except Exception as e:
-            _handle_request_error(e, "загрузки бандла")
+            handle_request_error(e, "загрузки бандла", _LOGGER)
 
         if info.sha256 and not _verify_sha256(path, info.sha256):
             _LOGGER.error("Хэш-сумма не совпала для %s", path)

@@ -4,7 +4,7 @@ import os
 import logging
 import requests
 
-from .errors import SupervisorError, NetworkError
+from .errors import SupervisorError, NetworkError, handle_request_error
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,11 +31,11 @@ def _supervisor_request(endpoint: str, error_context: str) -> dict:
             _LOGGER.debug("MQTT сервис еще не готов (400 Bad Request) - это нормально при старте системы")
             raise NetworkError("MQTT service not ready yet") from e
         else:
-            _LOGGER.error("HTTP ошибка %s: %s", error_context, e)
-            raise NetworkError(f"Failed to {error_context}") from e
+            handle_request_error(e, _LOGGER, "Supervisor API")
+            raise SupervisorError(f"Ошибка Supervisor API: {e}") from e
     except requests.RequestException as e:
-        _LOGGER.error("Ошибка %s: %s", error_context, e)
-        raise NetworkError(f"Failed to {error_context}") from e
+        handle_request_error(e, _LOGGER, "Supervisor API")
+        raise SupervisorError(f"Ошибка Supervisor API: {e}") from e
     except Exception as e:
         _LOGGER.error("Неожиданная ошибка %s: %s", error_context, e)
         raise SupervisorError(f"Unexpected error {error_context}") from e

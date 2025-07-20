@@ -27,9 +27,7 @@ class UpdateOrchestrator:
     def set_mqtt_service(self, mqtt_service: MqttService | None) -> None:
         self._mqtt_service = mqtt_service
 
-    def is_mqtt_ready(self) -> bool:
-        """Проверяет готовность MQTT сервиса."""
-        return self._mqtt_service is not None and self._mqtt_service._is_ready()
+
 
     def get_versions(self, installed: str | None = None, latest: str | None = None) -> tuple[str, str]:
         """Получает и кэширует версии системы."""
@@ -68,7 +66,7 @@ class UpdateOrchestrator:
 
     def publish_state(self, installed: str | None = None, latest: str | None = None, in_progress: bool | None = None) -> None:
         """Публикует текущее состояние в MQTT."""
-        if not self.is_mqtt_ready():
+        if not self._mqtt_service or not self._mqtt_service._is_ready():
             return
 
         installed, latest = self.get_versions(installed, latest)
@@ -137,7 +135,9 @@ class UpdateOrchestrator:
                 )
             except Exception as e:
                 _LOGGER.error("Ошибка отправки уведомления: %s", e)
-        else:
+        
+        # Публикуем финальное состояние только если установка не удалась
+        if not success:
             self.publish_state(latest=latest_version)
         
         _LOGGER.info("Установка завершена: %s", "успешно" if success else "неудачно")
