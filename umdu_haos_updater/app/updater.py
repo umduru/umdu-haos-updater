@@ -111,7 +111,6 @@ def download_update(info: UpdateInfo, orchestrator=None) -> Path:
         raise DownloadError("SHA256 mismatch after download")
     
     _set_progress_status(orchestrator, False, info.version)
-    
     logger.info("Файл обновления сохранён: %s", path)
     return path
 

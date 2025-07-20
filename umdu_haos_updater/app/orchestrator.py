@@ -46,17 +46,25 @@ class UpdateOrchestrator:
         
         return installed, self._latest_version
 
+    def _safe_mqtt_operation(self, operation_name: str, operation_func) -> None:
+        """Безопасно выполняет MQTT операцию с обработкой ошибок."""
+        if not self._mqtt_service:
+            return
+        try:
+            operation_func()
+        except Exception as e:
+            _LOGGER.warning("Ошибка %s MQTT: %s", operation_name, e)
+
     def publish_state(self, installed: str | None = None, latest: str | None = None) -> None:
         """Публикует текущее состояние в MQTT."""
         if not self._mqtt_service:
             return
 
         installed, latest = self.get_versions(installed, latest)
-
-        try:
-            self._mqtt_service.publish_update_state(installed, latest, self._in_progress)
-        except Exception as e:
-            _LOGGER.warning("Ошибка публикации состояния MQTT: %s", e)
+        self._safe_mqtt_operation(
+            "публикации состояния",
+            lambda: self._mqtt_service.publish_update_state(installed, latest, self._in_progress)
+        )
 
     def publish_initial_state(self) -> None:
         """Публикует начальное состояние после инициализации MQTT."""
@@ -64,21 +72,7 @@ class UpdateOrchestrator:
             return
         
         _LOGGER.info("Публикация начального состояния MQTT")
-        
-        try:
-            latest = fetch_available_update().version
-            _LOGGER.info("Получена доступная версия: %s", latest)
-        except Exception as e:
-            _LOGGER.warning("Не удалось получить доступную версию при инициализации: %s", e)
-            latest = None
-        
-        installed, latest = self.get_versions(latest=latest)
-        
-        try:
-            self._mqtt_service.publish_update_state(installed, latest, False)
-            _LOGGER.info("Начальное состояние опубликовано: installed=%s, latest=%s", installed, latest)
-        except Exception as e:
-            _LOGGER.warning("Ошибка публикации начального состояния MQTT: %s", e)
+        self.publish_state()
 
     def check_and_download(self) -> Path | None:
         """Проверяет и загружает обновление согласно конфигурации."""
@@ -107,11 +101,6 @@ class UpdateOrchestrator:
         if self._in_progress:
             return
 
-        try:
-            self._latest_version = fetch_available_update().version
-        except Exception:
-            pass  # Используем кэшированную версию или получим через _get_versions
-
         bundle_path = self.check_and_download()
         if bundle_path and self._cfg.auto_update:
             _LOGGER.info("Auto-installing %s", bundle_path)
@@ -133,13 +122,11 @@ class UpdateOrchestrator:
         
         self._in_progress = False
         
-        if self._mqtt_service:
-            if success:
-                self._mqtt_service.deactivate_update_entity()
-            else:
-                self.publish_state(latest=latest_version)
-
         if success:
+            self._safe_mqtt_operation(
+                "деактивации update entity",
+                lambda: self._mqtt_service.deactivate_update_entity()
+            )
             try:
                 self._notifier.send_notification(
                     "UMDU HAOS Update Installed", 
@@ -147,6 +134,8 @@ class UpdateOrchestrator:
                 )
             except Exception as e:
                 _LOGGER.error("Ошибка отправки уведомления: %s", e)
+        else:
+            self.publish_state(latest=latest_version)
         
         _LOGGER.info("Установка завершена: %s", "успешно" if success else "неудачно")
 
