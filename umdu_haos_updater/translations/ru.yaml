@@ -5,9 +5,6 @@ configuration:
   notifications:
     name: "Уведомления"
     description: "Отправлять уведомления в Home Assistant о статусе обновлений"
-  mqtt_discovery:
-    name: "MQTT Discovery"
-    description: "Включить автоматическое обнаружение через MQTT"
   mqtt_host:
     name: "MQTT хост"
     description: "Адрес MQTT брокера (по умолчанию core-mosquitto)"
