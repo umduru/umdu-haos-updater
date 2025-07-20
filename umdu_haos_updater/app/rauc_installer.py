@@ -9,7 +9,7 @@ from .errors import InstallError
 logger = logging.getLogger(__name__)
 
 
-def install_bundle(bundle_path: Path) -> None:
+def install_bundle(bundle_path: Path) -> bool:
     """Устанавливает RAUC-бандл."""
     if not bundle_path.exists():
         raise InstallError(f"Bundle file not found: {bundle_path}")
@@ -45,6 +45,7 @@ def install_bundle(bundle_path: Path) -> None:
             raise InstallError(f"RAUC install завершился с кодом {return_code}")
 
         logger.info("Установка бандла завершена успешно")
+        return True
     except FileNotFoundError as e:
         raise InstallError("RAUC CLI не найден") from e
     except Exception as e:

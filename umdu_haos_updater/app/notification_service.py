@@ -23,7 +23,11 @@ class NotificationService:
     def send_notification(self, title: str, message: str) -> bool:
         """Отправляет уведомление в Home Assistant."""
         if not self.enabled:
-            _LOGGER.debug("Уведомления отключены")
+            _LOGGER.warning("Уведомления отключены в конфигурации")
+            return False
+
+        if not TOKEN:
+            _LOGGER.error("SUPERVISOR_TOKEN отсутствует - невозможно отправить уведомление")
             return False
 
         try:
@@ -31,9 +35,12 @@ class NotificationService:
             headers = {"Authorization": f"Bearer {TOKEN}"}
             data = {"title": title, "message": message}
 
+            _LOGGER.debug("Отправка уведомления на URL: %s", url)
+            _LOGGER.debug("Данные уведомления: %s", data)
+            
             response = requests.post(url, json=data, headers=headers, timeout=10)
             response.raise_for_status()
-            _LOGGER.info("Уведомление отправлено: %s", title)
+            _LOGGER.info("Уведомление отправлено успешно: %s", title)
             return True
         except Exception as e:
             _LOGGER.error("Ошибка отправки уведомления: %s", e)

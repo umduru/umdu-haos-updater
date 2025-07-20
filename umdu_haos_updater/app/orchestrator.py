@@ -53,9 +53,12 @@ class UpdateOrchestrator:
 
     def install_if_ready(self, bundle_path: Path) -> bool:
         """Устанавливает RAUC bundle."""
+        _LOGGER.info("Начало install_if_ready для %s", bundle_path)
         try:
             success = install_bundle(bundle_path)
+            _LOGGER.info("install_bundle вернул: %s", success)
             if success:
+                _LOGGER.info("Создание флага перезагрузки")
                 self._touch_reboot_flag()
             return success
         except InstallError as exc:
@@ -86,20 +89,44 @@ class UpdateOrchestrator:
 
     def run_install(self, bundle_path: Path, latest_version: str | None = None) -> None:
         """Запускает RAUC-установку."""
+        _LOGGER.info("Начало установки: %s", bundle_path)
         self._in_progress = True
         self.publish_state(latest=latest_version)
 
-        success = self.install_if_ready(bundle_path)
+        try:
+            success = self.install_if_ready(bundle_path)
+            _LOGGER.info("Результат установки: %s", success)
+        except Exception as e:
+            _LOGGER.error("Исключение во время установки: %s", e)
+            success = False
+        
         self._in_progress = False
+        _LOGGER.info("Установка завершена, success=%s", success)
         
         if self._mqtt_service:
+            _LOGGER.info("Обработка MQTT после установки")
             if success:
+                _LOGGER.info("Деактивация MQTT сущности обновления")
                 self._mqtt_service.deactivate_update_entity()
             else:
+                _LOGGER.info("Публикация состояния MQTT после неудачной установки")
                 self.publish_state(latest=latest_version)
 
         if success:
-            self._notifier.send_notification("UMDU HAOS Update Installed", reboot_required_message(latest_version))
+            _LOGGER.info("Отправка уведомления о необходимости перезагрузки")
+            try:
+                notification_sent = self._notifier.send_notification(
+                    "UMDU HAOS Update Installed", 
+                    reboot_required_message(latest_version or "unknown")
+                )
+                if notification_sent:
+                    _LOGGER.info("Уведомление о перезагрузке отправлено успешно")
+                else:
+                    _LOGGER.warning("Не удалось отправить уведомление о перезагрузке")
+            except Exception as e:
+                _LOGGER.error("Исключение при отправке уведомления: %s", e)
+        
+        _LOGGER.info("Метод run_install завершен")
 
     @staticmethod
     def _touch_reboot_flag() -> None:

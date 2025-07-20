@@ -101,8 +101,18 @@ class MqttService:
         """Деактивирует update entity."""
         if not self.discovery_enabled:
             return
+        
+        logger.info("MQTT: деактивация update entity")
+        
+        # Очищаем discovery конфигурацию
         self._publish(UPDATE_DISC_TOPIC, "")
+        
+        # Очищаем state и availability топики
+        self._publish(STATE_TOPIC, "")
+        self._publish(UPDATE_AVAIL_TOPIC, "")
+        
         self._update_entity_active = False
+        logger.info("MQTT: update entity деактивирован")
 
     def _on_connect(self, client, userdata, flags, rc):  # noqa: D401
         success = rc == 0
