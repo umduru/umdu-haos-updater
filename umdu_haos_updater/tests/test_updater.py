@@ -202,7 +202,7 @@ class TestDownloadUpdate:
         with patch.object(Path, 'exists', return_value=True), \
              patch('pathlib.Path.mkdir'), \
              patch('app.updater._verify_sha256', return_value=True):
-            result = download_update(info)
+            result = download_update(info, orchestrator=None)
         
         assert result == info.download_path
 
@@ -223,7 +223,7 @@ class TestDownloadUpdate:
              patch.object(Path, 'glob', return_value=[]), \
              patch('requests.get', return_value=mock_response), \
              patch("builtins.open", mock_open()):
-            result = download_update(info)
+            result = download_update(info, orchestrator=None)
         
         assert result == info.download_path
 
@@ -236,7 +236,7 @@ class TestDownloadUpdate:
              patch.object(Path, 'glob', return_value=[]), \
              patch('requests.get', side_effect=requests.RequestException("Network error")):
             with pytest.raises(DownloadError):
-                download_update(info)
+                download_update(info, orchestrator=None)
 
     def test_cleanup_old_bundles(self):
         """Тест очистки старых бандлов"""
@@ -255,7 +255,7 @@ class TestDownloadUpdate:
              patch.object(Path, 'unlink') as mock_unlink, \
              patch('requests.get', return_value=mock_response), \
              patch("builtins.open", mock_open()):
-            download_update(info)
+            download_update(info, orchestrator=None)
         
         mock_unlink.assert_called()
 
@@ -281,7 +281,7 @@ class TestDownloadUpdate:
              patch.object(Path, 'glob', return_value=[]), \
              patch("builtins.open", mock_open()):
             with pytest.raises(DownloadError):
-                download_update(info)
+                download_update(info, orchestrator=None)
 
     @patch("app.updater.requests.get")
     def test_download_update_request_exception(self, mock_get):
@@ -295,7 +295,7 @@ class TestDownloadUpdate:
              patch('pathlib.Path.mkdir'), \
              patch.object(Path, 'glob', return_value=[]):
             with pytest.raises(DownloadError):
-                download_update(info)
+                download_update(info, orchestrator=None)
 
 
 class TestCheckForUpdateAndDownload:
@@ -307,7 +307,7 @@ class TestCheckForUpdateAndDownload:
         """Тест когда не удается определить текущую версию"""
         mock_current.return_value = None
         
-        result = check_for_update_and_download()
+        result = check_for_update_and_download(orchestrator=None)
         
         assert result is None
         mock_fetch.assert_not_called()
@@ -319,7 +319,7 @@ class TestCheckForUpdateAndDownload:
         mock_current.return_value = "15.2.0"
         mock_fetch.side_effect = NetworkError("Network")
         
-        result = check_for_update_and_download()
+        result = check_for_update_and_download(orchestrator=None)
         
         assert result is None
 
@@ -332,7 +332,7 @@ class TestCheckForUpdateAndDownload:
         mock_fetch.return_value = UpdateInfo("15.2.1")
         mock_download.return_value = Path("/path/to/bundle")
         
-        result = check_for_update_and_download(auto_download=True)
+        result = check_for_update_and_download(auto_download=True, orchestrator=None)
         
         assert result == Path("/path/to/bundle")
         mock_download.assert_called_once()
@@ -344,7 +344,7 @@ class TestCheckForUpdateAndDownload:
         mock_current.return_value = "15.2.1"
         mock_fetch.return_value = UpdateInfo("15.2.1")
         
-        result = check_for_update_and_download()
+        result = check_for_update_and_download(orchestrator=None)
         
         assert result is None
 
@@ -355,7 +355,7 @@ class TestCheckForUpdateAndDownload:
         mock_current.return_value = "15.2.0"
         mock_fetch.return_value = UpdateInfo("15.2.1")
         
-        result = check_for_update_and_download(auto_download=False)
+        result = check_for_update_and_download(auto_download=False, orchestrator=None)
         
         assert result is None
 
@@ -366,7 +366,7 @@ class TestCheckForUpdateAndDownload:
         mock_current.return_value = "1.0.0"
         mock_fetch.side_effect = NetworkError("Network failed")
         
-        result = check_for_update_and_download()
+        result = check_for_update_and_download(orchestrator=None)
         
         assert result is None
 
@@ -379,6 +379,6 @@ class TestCheckForUpdateAndDownload:
         mock_fetch.return_value = UpdateInfo("2.0.0")
         mock_download.side_effect = DownloadError("Download failed")
         
-        result = check_for_update_and_download(auto_download=True)
+        result = check_for_update_and_download(auto_download=True, orchestrator=None)
         
         assert result is None

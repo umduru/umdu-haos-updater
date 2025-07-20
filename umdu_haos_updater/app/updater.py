@@ -57,7 +57,7 @@ def is_newer(ver_a: str, ver_b: str) -> bool:
         return ver_a != ver_b and ver_a > ver_b
 
 
-def download_update(info: UpdateInfo) -> Path:
+def download_update(info: UpdateInfo, orchestrator=None) -> Path:
     path = info.download_path
 
     if path.exists():
@@ -76,6 +76,12 @@ def download_update(info: UpdateInfo) -> Path:
         if p.name != path.name:
             p.unlink(missing_ok=True)
 
+    # Устанавливаем статус in_progress при начале загрузки
+    if orchestrator:
+        orchestrator._in_progress = True
+        orchestrator.publish_state(latest=info.version)
+        logger.info("Установлен статус in_progress=True для загрузки")
+
     logger.info("Загрузка обновления %s", info.url)
     try:
         with requests.get(info.url, stream=True, timeout=30) as r:
@@ -85,12 +91,28 @@ def download_update(info: UpdateInfo) -> Path:
                     fw.write(chunk)
     except Exception as e:
         logger.exception("Ошибка загрузки бандла")
+        # Сбрасываем статус in_progress при ошибке загрузки
+        if orchestrator:
+            orchestrator._in_progress = False
+            orchestrator.publish_state(latest=info.version)
+            logger.info("Сброшен статус in_progress=False после ошибки загрузки")
         raise DownloadError("Error downloading update bundle") from e
 
     if info.sha256 and not _verify_sha256(path, info.sha256):
         logger.error("Хэш-сумма не совпала для %s", path)
         path.unlink(missing_ok=True)
+        # Сбрасываем статус in_progress при ошибке проверки хэша
+        if orchestrator:
+            orchestrator._in_progress = False
+            orchestrator.publish_state(latest=info.version)
+            logger.info("Сброшен статус in_progress=False после ошибки хэша")
         raise DownloadError("SHA256 mismatch after download")
+    
+    # Сбрасываем статус in_progress после успешной загрузки
+    if orchestrator:
+        orchestrator._in_progress = False
+        orchestrator.publish_state(latest=info.version)
+        logger.info("Сброшен статус in_progress=False после успешной загрузки")
     
     logger.info("Файл обновления сохранён: %s", path)
     return path
@@ -104,7 +126,7 @@ def _verify_sha256(path: Path, expected: str) -> bool:
     return sha.hexdigest().lower() == expected.lower()
 
 
-def check_for_update_and_download(auto_download: bool = False) -> Path | None:
+def check_for_update_and_download(auto_download: bool = False, orchestrator=None) -> Path | None:
     current = get_current_haos_version()
     if not current:
         logger.warning("Не удалось определить установленную версию")
@@ -121,7 +143,7 @@ def check_for_update_and_download(auto_download: bool = False) -> Path | None:
         logger.info("Найдена новая версия %s", avail.version)
         if auto_download:
             try:
-                return download_update(avail)
+                return download_update(avail, orchestrator)
             except DownloadError as e:
                 logger.error("Скачивание обновления не удалось: %s", e)
     else:

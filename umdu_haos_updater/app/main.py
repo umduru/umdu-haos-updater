@@ -56,7 +56,7 @@ def handle_install_cmd(orchestrator: UpdateOrchestrator):
 
     logger.info("MQTT install: установка версии %s", latest_version)
 
-    bundle_path = check_for_update_and_download(auto_download=True)
+    bundle_path = check_for_update_and_download(auto_download=True, orchestrator=orchestrator)
     if not bundle_path:
         logger.error("Не удалось получить RAUC-бандл, установка отменена")
         orchestrator.publish_state(latest=latest_version)

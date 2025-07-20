@@ -49,7 +49,7 @@ class UpdateOrchestrator:
 
     def check_and_download(self) -> Path | None:
         """Проверяет и загружает обновление согласно конфигурации."""
-        return check_for_update_and_download(auto_download=self._cfg.auto_update)
+        return check_for_update_and_download(auto_download=self._cfg.auto_update, orchestrator=self)
 
     def install_if_ready(self, bundle_path: Path) -> bool:
         """Устанавливает RAUC bundle."""
