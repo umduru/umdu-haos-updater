@@ -1,6 +1,6 @@
 name: "UMDU Home Assistant OS Updater"
 description: "Add-on для обновления форка HAOS для UMDU K1"
-version: "0.8.8"
+version: "0.8.9"
 slug: "umdu_haos_updater"
 init: false
 arch:
@@ -22,39 +22,14 @@ options:
   mqtt_password: ""
   debug: false
 schema:
-
-  auto_update:
-    name: "Автоматическое обновление"
-    description: "Автоматически устанавливать обновления при их обнаружении"
-    type: bool
-  notifications:
-    name: "Уведомления"
-    description: "Отправлять уведомления в Home Assistant о статусе обновлений"
-    type: bool
-  mqtt_discovery:
-    name: "MQTT Discovery"
-    description: "Включить автоматическое обнаружение через MQTT"
-    type: bool
-  mqtt_host:
-    name: "MQTT хост"
-    description: "Адрес MQTT брокера (по умолчанию core-mosquitto)"
-    type: str?
-  mqtt_port:
-    name: "MQTT порт"
-    description: "Порт MQTT брокера (по умолчанию 1883)"
-    type: port?
-  mqtt_user:
-    name: "MQTT пользователь"
-    description: "Имя пользователя для подключения к MQTT брокеру (необязательно)"
-    type: str?
-  mqtt_password:
-    name: "MQTT пароль"
-    description: "Пароль для подключения к MQTT брокеру (необязательно)"
-    type: str?
-  debug:
-    name: "Режим отладки"
-    description: "Включить подробное логирование для диагностики проблем"
-    type: bool
+  auto_update: bool
+  notifications: bool
+  mqtt_discovery: bool
+  mqtt_host: str?
+  mqtt_port: port?
+  mqtt_user: str?
+  mqtt_password: str?
+  debug: bool
 map:
   - type: share
     read_only: false

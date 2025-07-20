@@ -1,0 +1,25 @@
+configuration:
+  auto_update:
+    name: "Автоматическое обновление"
+    description: "Автоматически устанавливать обновления при их обнаружении"
+  notifications:
+    name: "Уведомления"
+    description: "Отправлять уведомления в Home Assistant о статусе обновлений"
+  mqtt_discovery:
+    name: "MQTT Discovery"
+    description: "Включить автоматическое обнаружение через MQTT"
+  mqtt_host:
+    name: "MQTT хост"
+    description: "Адрес MQTT брокера (по умолчанию core-mosquitto)"
+  mqtt_port:
+    name: "MQTT порт"
+    description: "Порт MQTT брокера (по умолчанию 1883)"
+  mqtt_user:
+    name: "MQTT пользователь"
+    description: "Имя пользователя для подключения к MQTT брокеру (необязательно)"
+  mqtt_password:
+    name: "MQTT пароль"
+    description: "Пароль для подключения к MQTT брокеру (необязательно)"
+  debug:
+    name: "Режим отладки"
+    description: "Включить подробное логирование для диагностики проблем"
