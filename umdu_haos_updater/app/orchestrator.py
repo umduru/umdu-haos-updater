@@ -59,24 +59,18 @@ class UpdateOrchestrator:
         except Exception as e:
             _LOGGER.warning("Ошибка %s MQTT: %s", operation_name, e)
 
-    def publish_state(self, installed: str | None = None, latest: str | None = None) -> None:
+    def publish_state(self, installed: str | None = None, latest: str | None = None, in_progress: bool | None = None) -> None:
         """Публикует текущее состояние в MQTT."""
-        if not self._mqtt_service:
+        if not self.is_mqtt_ready():
             return
 
         installed, latest = self.get_versions(installed, latest)
+        current_in_progress = self._in_progress if in_progress is None else in_progress
+
         self._safe_mqtt_operation(
             "публикации состояния",
-            lambda: self._mqtt_service.publish_update_state(installed, latest, self._in_progress)
+            lambda: self._mqtt_service.publish_update_state(installed, latest, current_in_progress)
         )
-
-    def publish_initial_state(self) -> None:
-        """Публикует начальное состояние после подключения MQTT."""
-        self.publish_state()
-
-    def publish_error_state(self, latest_version: str | None = None) -> None:
-        """Публикует состояние после ошибки установки."""
-        self.publish_state(latest=latest_version)
 
 
 
@@ -141,7 +135,7 @@ class UpdateOrchestrator:
             except Exception as e:
                 _LOGGER.error("Ошибка отправки уведомления: %s", e)
         else:
-            self.publish_error_state(latest_version)
+            self.publish_state(latest=latest_version)
         
         _LOGGER.info("Установка завершена: %s", "успешно" if success else "неудачно")
 

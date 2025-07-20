@@ -68,16 +68,10 @@ class MqttService:
         """Проверяет готовность к публикации."""
         return self.discovery_enabled and self._connected
 
-    def _require_ready(func):
-        """Декоратор для проверки готовности перед публикацией."""
-        def wrapper(self, *args, **kwargs):
-            if not self._is_ready():
-                return
-            return func(self, *args, **kwargs)
-        return wrapper
-
     def publish_update_state(self, installed: str, latest: str, in_progress: bool = False) -> None:
         """Публикует состояние обновления в едином формате."""
+        if not self._is_ready():
+            return
         payload = {
             "installed_version": installed,
             "latest_version": latest,
@@ -86,9 +80,10 @@ class MqttService:
         
         self._publish(STATE_TOPIC, json.dumps(payload), retain=False)
 
-    @_require_ready
     def publish_update_availability(self, online: bool) -> None:
         """Публикует доступность update entity."""
+        if not self._is_ready():
+            return
         self._publish(UPDATE_AVAIL_TOPIC, "online" if online else "offline")
     
     def set_initial_versions(self, installed: str, latest: str) -> None:

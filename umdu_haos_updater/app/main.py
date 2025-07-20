@@ -31,7 +31,7 @@ def handle_install_cmd(orchestrator: UpdateOrchestrator):
     bundle_path = check_for_update_and_download(auto_download=True, orchestrator=orchestrator)
     if not bundle_path:
         _LOGGER.error("Не удалось получить RAUC-бандл, установка отменена")
-        orchestrator.publish_error_state(latest_version)
+        orchestrator.publish_state(latest=latest_version)
         return
 
     orchestrator.run_install(bundle_path, latest_version)
@@ -87,7 +87,7 @@ async def handle_mqtt_reconnection(cfg: AddonConfig, orchestrator: UpdateOrchest
         _LOGGER.info("MQTT успешно переподключен")
         orchestrator.set_mqtt_service(mqtt_service)
         _LOGGER.info("Публикация начального состояния MQTT")
-        await loop.run_in_executor(None, orchestrator.publish_initial_state)
+        await loop.run_in_executor(None, orchestrator.publish_state)
         return mqtt_service, 0  # Сбрасываем счетчик
     elif mqtt_retry_count >= max_mqtt_retries:
         _LOGGER.warning("Достигнуто максимальное количество попыток подключения к MQTT (%d). Продолжаем работу без MQTT.", max_mqtt_retries)

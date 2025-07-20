@@ -65,21 +65,18 @@ def is_newer(ver_a: str, ver_b: str) -> bool:
         return ver_a != ver_b and ver_a > ver_b
 
 
-def _set_progress_status(orchestrator, in_progress: bool, version: str) -> None:
-    """Устанавливает статус прогресса загрузки."""
-    if orchestrator:
-        orchestrator._in_progress = in_progress
-        orchestrator.publish_state(latest=version)
-
-
 @contextmanager
 def _download_progress(orchestrator, version: str):
     """Контекст-менеджер для управления статусом прогресса загрузки."""
-    _set_progress_status(orchestrator, True, version)
+    if orchestrator:
+        orchestrator._in_progress = True
+        orchestrator.publish_state(latest=version)
     try:
         yield
     finally:
-        _set_progress_status(orchestrator, False, version)
+        if orchestrator:
+            orchestrator._in_progress = False
+            orchestrator.publish_state(latest=version)
 
 
 def download_update(info: UpdateInfo, orchestrator=None) -> Path:
