@@ -1,6 +1,6 @@
 name: "UMDU Home Assistant OS Updater"
 description: "Add-on для обновления форка HAOS для umdu k1"
-version: "0.8.13"
+version: "0.8.14"
 slug: "umdu_haos_updater"
 init: false
 arch:
@@ -12,7 +12,6 @@ hassio_api: true
 hassio_role: admin
 homeassistant_api: true
 options:
-  update_check_interval: 86400
   auto_update: false
   notifications: true
   debug: false

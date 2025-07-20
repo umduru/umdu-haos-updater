@@ -15,7 +15,8 @@ class AddonConfig:
         except (FileNotFoundError, json.JSONDecodeError):
             options = {}
 
-        self.check_interval = options.get("check_interval", 3600)
+        # Фиксированный интервал проверки обновлений - 24 часа
+        self.check_interval = 86400
         self.auto_update = options.get("auto_update", False)
         self.notifications = options.get("notifications", True)
         self.debug = options.get("debug", False)
@@ -30,8 +31,5 @@ class AddonConfig:
         self._validate_config()
 
     def _validate_config(self):
-        if not isinstance(self.check_interval, int) or self.check_interval < 60:
-            self.check_interval = 3600
-
         if not isinstance(self.mqtt_port, int) or not (1 <= self.mqtt_port <= 65535):
             self.mqtt_port = 1883
