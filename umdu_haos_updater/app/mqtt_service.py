@@ -76,7 +76,6 @@ class MqttService:
             return func(self, *args, **kwargs)
         return wrapper
 
-    @_require_ready
     def publish_update_state(self, installed: str, latest: str, in_progress: bool = False) -> None:
         """Публикует состояние обновления в едином формате."""
         payload = {
@@ -102,9 +101,7 @@ class MqttService:
         if not self.discovery_enabled:
             return
         
-        topics = [STATE_TOPIC, UPDATE_AVAIL_TOPIC]
-        
-        for topic in topics:
+        for topic in [STATE_TOPIC, UPDATE_AVAIL_TOPIC]:
             logger.info("MQTT: очистка retain-сообщения для %s", topic)
             self._client.publish(topic, "", retain=True)
 

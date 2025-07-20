@@ -47,14 +47,6 @@ def build_mqtt_params(cfg: AddonConfig) -> tuple[str, int, str | None, str | Non
     return host, port, user, password
 
 
-# ------------------------------------------------------------------
-# MQTT command handlers
-# ------------------------------------------------------------------
-
-
-
-
-
 def handle_install_cmd(orchestrator: UpdateOrchestrator):
     """Обработчик MQTT-команды install."""
     _, latest_version = orchestrator.get_versions()
@@ -67,9 +59,6 @@ def handle_install_cmd(orchestrator: UpdateOrchestrator):
         return
 
     orchestrator.run_install(bundle_path, latest_version)
-
-
-
 
 
 async def try_initialize_mqtt(cfg: AddonConfig, orchestrator: UpdateOrchestrator, loop: asyncio.AbstractEventLoop, retry_delay: int = 0) -> MqttService | None:
@@ -121,7 +110,8 @@ async def handle_mqtt_reconnection(cfg: AddonConfig, orchestrator: UpdateOrchest
     if await setup_mqtt_service(mqtt_service, orchestrator, loop):
         logger.info("MQTT успешно переподключен")
         orchestrator.set_mqtt_service(mqtt_service)
-        await loop.run_in_executor(None, orchestrator.publish_initial_state)
+        logger.info("Публикация начального состояния MQTT")
+        await loop.run_in_executor(None, orchestrator.publish_state)
         return mqtt_service, 0  # Сбрасываем счетчик
     elif mqtt_retry_count >= max_mqtt_retries:
         logger.warning("Достигнуто максимальное количество попыток подключения к MQTT (%d). Продолжаем работу без MQTT.", max_mqtt_retries)

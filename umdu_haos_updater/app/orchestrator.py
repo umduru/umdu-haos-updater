@@ -66,13 +66,7 @@ class UpdateOrchestrator:
             lambda: self._mqtt_service.publish_update_state(installed, latest, self._in_progress)
         )
 
-    def publish_initial_state(self) -> None:
-        """Публикует начальное состояние после инициализации MQTT."""
-        if not self._mqtt_service:
-            return
-        
-        _LOGGER.info("Публикация начального состояния MQTT")
-        self.publish_state()
+
 
     def check_and_download(self) -> Path | None:
         """Проверяет и загружает обновление согласно конфигурации."""

@@ -69,7 +69,6 @@ def _set_progress_status(orchestrator, in_progress: bool, version: str) -> None:
     if orchestrator:
         orchestrator._in_progress = in_progress
         orchestrator.publish_state(latest=version)
-        logger.info("Статус in_progress=%s для версии %s", in_progress, version)
 
 
 def download_update(info: UpdateInfo, orchestrator=None) -> Path:
