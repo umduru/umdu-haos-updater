@@ -73,7 +73,7 @@ def handle_install_cmd(orchestrator: UpdateOrchestrator):
 async def try_initialize_mqtt(cfg: AddonConfig, loop: asyncio.AbstractEventLoop, retry_delay: int = 0) -> MqttService | None:
     """Пытается инициализировать MQTT сервис."""
     if retry_delay > 0:
-        logger.info("Ожидание %d секунд перед попыткой подключения к MQTT...", retry_delay)
+        logger.info("Ожидание %d секунд перед попыткой подключения к MQTT", retry_delay)
         await asyncio.sleep(retry_delay)
     
     logger.info("Попытка инициализации MQTT...")
@@ -95,7 +95,7 @@ async def try_initialize_mqtt(cfg: AddonConfig, loop: asyncio.AbstractEventLoop,
 
 async def main() -> None:
     logger.info("-" * 80)
-    logger.info("Запуск UMDU HAOS Updater (Python edition)…")
+    logger.info("Запуск UMDU HAOS Updater")
 
     cfg = AddonConfig()
     if cfg.debug:
@@ -136,7 +136,7 @@ async def main() -> None:
             mqtt_retry_count += 1
             retry_delay = min(30 + (mqtt_retry_count - 1) * 15, 120)  # Увеличиваем задержку: 30, 45, 60, 75, 90, 105, 120
             
-            logger.info("MQTT не подключен. Попытка переподключения #%d через %d секунд...", mqtt_retry_count, retry_delay)
+            logger.info("MQTT не подключен. Попытка переподключения #%d через %d секунд", mqtt_retry_count, retry_delay)
             mqtt_service = await try_initialize_mqtt(cfg, loop, retry_delay=retry_delay)
             
             if setup_mqtt_handler(mqtt_service):
