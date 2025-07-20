@@ -148,6 +148,15 @@ class TestIsNewer:
         assert is_newer("xyz", "abc") is True   # xyz > abc
         assert is_newer("same", "same") is False
 
+    def test_is_newer_exception_handling(self):
+        """Тест обработки исключений в is_newer с использованием fallback."""
+        # Мокируем Version чтобы он вызывал исключение
+        with patch("app.updater.Version", side_effect=Exception("Parse error")):
+            # Должен использовать fallback сравнение строк
+            assert is_newer("2.0.0", "1.0.0") is True
+            assert is_newer("1.0.0", "2.0.0") is False
+            assert is_newer("1.0.0", "1.0.0") is False
+
 
 class TestVerifySha256:
     """Тесты для функции _verify_sha256"""
@@ -250,6 +259,44 @@ class TestDownloadUpdate:
         
         mock_unlink.assert_called()
 
+    @patch("app.updater.requests.get")
+    @patch("app.updater._verify_sha256")
+    def test_download_update_sha256_mismatch(self, mock_verify, mock_get):
+        """Тест случая, когда хэш-сумма не совпадает после загрузки."""
+        info = UpdateInfo("1.0.0", "correct_hash")
+        
+        # Мокируем успешную загрузку
+        mock_response = Mock()
+        mock_response.__enter__ = lambda s: s
+        mock_response.__exit__ = lambda s,*args: None
+        mock_response.raise_for_status.return_value = None
+        mock_response.iter_content.return_value = [b"fake_data"]
+        mock_get.return_value = mock_response
+        
+        # Мокируем неудачную проверку хэша
+        mock_verify.return_value = False
+        
+        with patch.object(Path, 'exists', return_value=False), \
+             patch('pathlib.Path.mkdir'), \
+             patch.object(Path, 'glob', return_value=[]), \
+             patch("builtins.open", mock_open()):
+            with pytest.raises(DownloadError):
+                download_update(info)
+
+    @patch("app.updater.requests.get")
+    def test_download_update_request_exception(self, mock_get):
+        """Тест обработки исключения при загрузке."""
+        info = UpdateInfo("1.0.0")
+        
+        # Мокируем исключение при запросе
+        mock_get.side_effect = Exception("Network error")
+        
+        with patch.object(Path, 'exists', return_value=False), \
+             patch('pathlib.Path.mkdir'), \
+             patch.object(Path, 'glob', return_value=[]):
+            with pytest.raises(DownloadError):
+                download_update(info)
+
 
 class TestCheckForUpdateAndDownload:
     """Тесты для функции check_for_update_and_download"""
@@ -310,4 +357,28 @@ class TestCheckForUpdateAndDownload:
         
         result = check_for_update_and_download(auto_download=False)
         
-        assert result is None 
+        assert result is None
+
+    @patch("app.updater.get_current_haos_version")
+    @patch("app.updater.fetch_available_update")
+    def test_check_for_update_and_download_network_error(self, mock_fetch, mock_current):
+        """Тест обработки сетевой ошибки при получении информации об обновлении."""
+        mock_current.return_value = "1.0.0"
+        mock_fetch.side_effect = NetworkError("Network failed")
+        
+        result = check_for_update_and_download()
+        
+        assert result is None
+
+    @patch("app.updater.get_current_haos_version")
+    @patch("app.updater.fetch_available_update")
+    @patch("app.updater.download_update")
+    def test_check_for_update_and_download_download_error(self, mock_download, mock_fetch, mock_current):
+        """Тест обработки ошибки загрузки."""
+        mock_current.return_value = "1.0.0"
+        mock_fetch.return_value = UpdateInfo("2.0.0")
+        mock_download.side_effect = DownloadError("Download failed")
+        
+        result = check_for_update_and_download(auto_download=True)
+        
+        assert result is None

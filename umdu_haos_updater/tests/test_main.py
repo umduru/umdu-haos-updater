@@ -46,6 +46,18 @@ class TestBuildMqttParams:
         assert user == "supervisor_user"
         assert password == "supervisor_pass"
 
+    def test_mqtt_params_supervisor_exception(self):
+        """Тест обработки исключения при обращении к Supervisor API"""
+        cfg = AddonConfig()  # Пустой конфиг
+        
+        with patch("app.main.get_mqtt_service", side_effect=Exception("API error")):
+            host, port, user, password = build_mqtt_params(cfg)
+        
+        assert host is None
+        assert port == 1883
+        assert user is None
+        assert password is None
+
 
 @pytest.mark.asyncio
 async def test_try_initialize_mqtt_success(mocker):
@@ -128,4 +140,94 @@ async def test_main_loop_reconnect_logic(mocker):
         await main()
 
     # Проверяем, что была попытка подключения дважды
-    assert mock_try_init_mqtt.call_count == 2 
+    assert mock_try_init_mqtt.call_count == 2
+
+
+class TestHandleInstallCmd:
+    """Тесты для функции handle_install_cmd"""
+
+    def test_handle_install_cmd_success(self, mocker):
+        """Тест успешной обработки команды установки"""
+        mock_cfg = mocker.Mock()
+        mock_orchestrator = mocker.Mock()
+        
+        mock_fetch = mocker.patch("app.main.fetch_available_update")
+        mock_fetch.return_value.version = "1.2.3"
+        
+        mock_check_download = mocker.patch("app.main.check_for_update_and_download")
+        mock_check_download.return_value = Path("/fake/bundle.raucb")
+        
+        from app.main import handle_install_cmd
+        handle_install_cmd(mock_cfg, mock_orchestrator)
+        
+        mock_check_download.assert_called_once_with(auto_download=True)
+        mock_orchestrator.run_install.assert_called_once_with(Path("/fake/bundle.raucb"), "1.2.3")
+
+    def test_handle_install_cmd_fetch_exception(self, mocker):
+        """Тест обработки исключения при получении информации об обновлении"""
+        mock_cfg = mocker.Mock()
+        mock_orchestrator = mocker.Mock()
+        
+        mock_fetch = mocker.patch("app.main.fetch_available_update", side_effect=Exception("Network error"))
+        mock_check_download = mocker.patch("app.main.check_for_update_and_download")
+        mock_check_download.return_value = Path("/fake/bundle.raucb")
+        
+        from app.main import handle_install_cmd
+        handle_install_cmd(mock_cfg, mock_orchestrator)
+        
+        mock_orchestrator.run_install.assert_called_once_with(Path("/fake/bundle.raucb"), None)
+
+    def test_handle_install_cmd_no_bundle(self, mocker):
+        """Тест случая, когда не удалось получить бандл"""
+        mock_cfg = mocker.Mock()
+        mock_orchestrator = mocker.Mock()
+        
+        mock_fetch = mocker.patch("app.main.fetch_available_update")
+        mock_fetch.return_value.version = "1.2.3"
+        
+        mock_check_download = mocker.patch("app.main.check_for_update_and_download")
+        mock_check_download.return_value = None
+        
+        from app.main import handle_install_cmd
+        handle_install_cmd(mock_cfg, mock_orchestrator)
+        
+        mock_orchestrator.publish_state.assert_called_once_with(latest="1.2.3")
+        mock_orchestrator.run_install.assert_not_called()
+
+    def test_handle_install_cmd_no_orchestrator(self, mocker):
+        """Тест случая, когда orchestrator не предоставлен"""
+        mock_cfg = mocker.Mock()
+        mock_logger = mocker.patch("app.main.logger")
+        
+        from app.main import handle_install_cmd
+        handle_install_cmd(mock_cfg, None)
+        
+        mock_logger.error.assert_called_once_with("Orchestrator not provided for install command")
+
+
+class TestMainFunction:
+    """Тесты для функции main"""
+
+    @pytest.mark.asyncio
+    async def test_main_no_token(self, mocker):
+        """Тест выхода из программы при отсутствии TOKEN"""
+        mocker.patch("app.main.AddonConfig.load")
+        mocker.patch("app.main.TOKEN", None)  # Нет токена
+        # Мокируем все возможные вызовы get_current_haos_version
+        mocker.patch("app.supervisor_api.get_current_haos_version", return_value="1.0.0")
+        mocker.patch("app.orchestrator.get_current_haos_version", return_value="1.0.0")
+        mocker.patch("app.updater.get_current_haos_version", return_value="1.0.0")
+        
+        # Мокируем sys.exit чтобы он вызывал исключение вместо реального выхода
+        mock_sys_exit = mocker.patch("sys.exit", side_effect=SystemExit(1))
+        mock_logger = mocker.patch("app.main.logger")
+        
+        from app.main import main
+        
+        # Ожидаем SystemExit исключение
+        with pytest.raises(SystemExit) as exc_info:
+            await main()
+        
+        assert exc_info.value.code == 1
+        mock_logger.error.assert_called_with("SUPERVISOR_TOKEN отсутствует — работа невозможна")
+        mock_sys_exit.assert_called_once_with(1)
