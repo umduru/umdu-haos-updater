@@ -53,14 +53,15 @@ class MqttService:
 
     def start(self) -> None:
         """Запускает MQTT клиент."""
-        logger.info("MQTT: connecting to %s:%s", self.host, self.port)
+        logger.info("MQTT: connecting to %s:%s (user: %s)", self.host, self.port, self._client._username or "None")
         try:
             self._client.enable_logger(logger)
             self._client.connect(self.host, self.port, 60)
             self._client.loop_start()
+            logger.debug("MQTT: клиент запущен, ожидание подключения...")
         except Exception as exc:
-            logger.warning("MQTT: connection error: %s", exc)
-            return
+            logger.error("MQTT: connection error: %s", exc)
+            raise
 
     def _is_ready(self) -> bool:
         """Проверяет готовность к публикации."""

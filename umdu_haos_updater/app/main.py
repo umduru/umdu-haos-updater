@@ -33,7 +33,10 @@ def build_mqtt_params(cfg: AddonConfig):
                 user = user or sup.get("username")
                 password = password or sup.get("password")
         except Exception as exc:
-            logger.debug("MQTT params via Supervisor API failed: %s", exc)
+            logger.warning("MQTT params via Supervisor API failed: %s", exc)
+            # Если не удалось получить данные из Supervisor API, используем конфигурацию
+            if not host or host == "core-mosquitto":
+                host = "core-mosquitto"  # Fallback к дефолтному хосту
 
     return host, port, user, password
 
@@ -67,14 +70,18 @@ async def try_initialize_mqtt(cfg: AddonConfig, loop: asyncio.AbstractEventLoop)
     logger.info("Попытка инициализации MQTT...")
     host, port, user, passwd = await loop.run_in_executor(None, lambda: build_mqtt_params(cfg))
 
-    if not (cfg.mqtt_enabled and host):
+    if not host:
         logger.warning("Не удалось инициализировать MQTT. Следующая попытка будет в следующем цикле.")
         return None
 
-    mqtt_service = MqttService(host=host, port=port, username=user, password=passwd, discovery=True)
-    mqtt_service.start()
-    logger.info("MQTT сервис успешно запущен")
-    return mqtt_service
+    try:
+        mqtt_service = MqttService(host=host, port=port, username=user, password=passwd, discovery=True)
+        mqtt_service.start()
+        logger.info("MQTT сервис успешно запущен")
+        return mqtt_service
+    except Exception as exc:
+        logger.warning("Не удалось инициализировать MQTT: %s. Следующая попытка будет в следующем цикле.", exc)
+        return None
 
 
 async def main() -> None:

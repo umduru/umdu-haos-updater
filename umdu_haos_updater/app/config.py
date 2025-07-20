@@ -30,7 +30,7 @@ class AddonConfig:
         self.mqtt_port = mqtt_config.get("port", 1883)
         self.mqtt_username = mqtt_config.get("username", "")
         self.mqtt_password = mqtt_config.get("password", "")
-        self.mqtt_enabled = bool(self.mqtt_username and self.mqtt_password)
+        self.mqtt_enabled = options.get("mqtt_enabled", True)  # По умолчанию включен
 
         self._validate_config()
 
