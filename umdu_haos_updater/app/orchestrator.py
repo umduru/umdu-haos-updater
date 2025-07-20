@@ -27,7 +27,7 @@ class UpdateOrchestrator:
     def set_mqtt_service(self, mqtt_service: MqttService | None) -> None:
         self._mqtt_service = mqtt_service
 
-    def _get_versions(self, installed: str | None = None, latest: str | None = None) -> tuple[str, str]:
+    def get_versions(self, installed: str | None = None, latest: str | None = None) -> tuple[str, str]:
         """Получает и кэширует версии системы."""
         if installed is None:
             if self._installed_version is None:
@@ -51,7 +51,7 @@ class UpdateOrchestrator:
         if not self._mqtt_service:
             return
 
-        installed, latest = self._get_versions(installed, latest)
+        installed, latest = self.get_versions(installed, latest)
 
         try:
             self._mqtt_service.publish_update_state(installed, latest, self._in_progress)
@@ -72,7 +72,7 @@ class UpdateOrchestrator:
             _LOGGER.warning("Не удалось получить доступную версию при инициализации: %s", e)
             latest = None
         
-        installed, latest = self._get_versions(latest=latest)
+        installed, latest = self.get_versions(latest=latest)
         
         try:
             self._mqtt_service.publish_update_state(installed, latest, False)
@@ -127,38 +127,28 @@ class UpdateOrchestrator:
 
         try:
             success = self.install_if_ready(bundle_path)
-            _LOGGER.info("Результат установки: %s", success)
         except Exception as e:
             _LOGGER.error("Исключение во время установки: %s", e)
             success = False
         
         self._in_progress = False
-        _LOGGER.info("Установка завершена, success=%s", success)
         
         if self._mqtt_service:
-            _LOGGER.info("Обработка MQTT после установки")
             if success:
-                _LOGGER.info("Деактивация MQTT сущности обновления")
                 self._mqtt_service.deactivate_update_entity()
             else:
-                _LOGGER.info("Публикация состояния MQTT после неудачной установки")
                 self.publish_state(latest=latest_version)
 
         if success:
-            _LOGGER.info("Отправка уведомления о необходимости перезагрузки")
             try:
-                notification_sent = self._notifier.send_notification(
+                self._notifier.send_notification(
                     "UMDU HAOS Update Installed", 
                     reboot_required_message(latest_version or "unknown")
                 )
-                if notification_sent:
-                    _LOGGER.info("Уведомление о перезагрузке отправлено успешно")
-                else:
-                    _LOGGER.warning("Не удалось отправить уведомление о перезагрузке")
             except Exception as e:
-                _LOGGER.error("Исключение при отправке уведомления: %s", e)
+                _LOGGER.error("Ошибка отправки уведомления: %s", e)
         
-        _LOGGER.info("Метод run_install завершен")
+        _LOGGER.info("Установка завершена: %s", "успешно" if success else "неудачно")
 
     @staticmethod
     def _touch_reboot_flag() -> None:

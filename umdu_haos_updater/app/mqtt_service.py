@@ -85,7 +85,7 @@ class MqttService:
             "in_progress": in_progress
         }
         
-        self._publish_state(STATE_TOPIC, json.dumps(payload))
+        self._publish(STATE_TOPIC, json.dumps(payload), retain=False)
 
     @_require_ready
     def publish_update_availability(self, online: bool) -> None:
@@ -186,30 +186,22 @@ class MqttService:
                 logger.info("MQTT: публикация начального состояния: installed=%s, latest=%s", installed, latest)
                 self.publish_update_state(installed, latest, False)
 
-    def _publish(self, topic: str, payload: str):
-        """Внутренний метод для публикации с retain=True."""
-        logger.debug("MQTT publish (retained) %s %s", topic, payload[:120])
+    def _publish(self, topic: str, payload: str, retain: bool = True):
+        """Внутренний метод для публикации сообщений."""
+        msg_type = "retained" if retain else "state"
+        logger.debug("MQTT publish (%s) %s %s", msg_type, topic, payload[:120])
         if not self._connected:
             logger.warning("MQTT: попытка публикации при отсутствии подключения")
             return
-        result = self._client.publish(topic, payload, retain=True)
+        
+        if not retain:
+            time.sleep(0.1)
+        
+        qos = 1 if not retain else 0
+        result = self._client.publish(topic, payload, retain=retain, qos=qos)
         if result.rc != 0:
             logger.warning("MQTT: ошибка публикации в %s: %s", topic, result.rc)
         else:
             logger.debug("MQTT: успешная публикация в %s", topic)
-
-    def _publish_state(self, topic: str, payload: str):
-        """Внутренний метод для публикации state сообщений без retain."""
-        logger.debug("MQTT publish (state) %s %s", topic, payload[:120])
-        if not self._connected:
-            logger.warning("MQTT: попытка публикации состояния при отсутствии подключения")
-            return
-        
-        time.sleep(0.1)
-        
-        result = self._client.publish(topic, payload, retain=False, qos=1)
-        if result.rc != 0:
-            logger.warning("MQTT: ошибка публикации состояния в %s: %s", topic, result.rc)
-        else:
-            logger.debug("MQTT: успешная публикация состояния в %s", topic)
-            result.wait_for_publish(timeout=2.0)
+            if not retain:
+                result.wait_for_publish(timeout=2.0)

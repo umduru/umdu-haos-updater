@@ -57,18 +57,12 @@ def build_mqtt_params(cfg: AddonConfig):
 # ------------------------------------------------------------------
 
 
-def _get_latest_version() -> str | None:
-    """Получает последнюю доступную версию."""
-    try:
-        return fetch_available_update().version
-    except Exception as exc:
-        logger.debug("fetch_available_update failed: %s", exc)
-        return None
+
 
 
 def handle_install_cmd(orchestrator: UpdateOrchestrator):
     """Обработчик MQTT-команды install."""
-    latest_version = _get_latest_version()
+    _, latest_version = orchestrator.get_versions()
     logger.info("MQTT install: установка версии %s", latest_version)
 
     bundle_path = check_for_update_and_download(auto_download=True, orchestrator=orchestrator)
@@ -80,23 +74,10 @@ def handle_install_cmd(orchestrator: UpdateOrchestrator):
     orchestrator.run_install(bundle_path, latest_version)
 
 
-async def _get_versions_for_mqtt(loop: asyncio.AbstractEventLoop) -> tuple[str, str]:
-    """Получает версии для инициализации MQTT."""
-    from .supervisor_api import get_current_haos_version
-    installed = await loop.run_in_executor(None, get_current_haos_version) or "unknown"
-    
-    try:
-        latest_info = await loop.run_in_executor(None, fetch_available_update)
-        latest = latest_info.version
-        logger.info("Получены версии для MQTT: installed=%s, latest=%s", installed, latest)
-    except Exception as e:
-        logger.warning("Не удалось получить доступную версию: %s", e)
-        latest = installed
-    
-    return installed, latest
 
 
-async def try_initialize_mqtt(cfg: AddonConfig, loop: asyncio.AbstractEventLoop, retry_delay: int = 0) -> MqttService | None:
+
+async def try_initialize_mqtt(cfg: AddonConfig, orchestrator: UpdateOrchestrator, loop: asyncio.AbstractEventLoop, retry_delay: int = 0) -> MqttService | None:
     """Пытается инициализировать MQTT сервис."""
     if retry_delay > 0:
         logger.info("Ожидание %d секунд перед попыткой подключения к MQTT", retry_delay)
@@ -110,7 +91,7 @@ async def try_initialize_mqtt(cfg: AddonConfig, loop: asyncio.AbstractEventLoop,
         return None
 
     try:
-        installed, latest = await _get_versions_for_mqtt(loop)
+        installed, latest = await loop.run_in_executor(None, orchestrator.get_versions)
         
         mqtt_service = MqttService(host=host, port=port, username=user, password=passwd, discovery=True)
         mqtt_service.set_initial_versions(installed, latest)
@@ -138,11 +119,11 @@ async def main() -> None:
 
     loop = asyncio.get_running_loop()
     
-    # Начальная задержка для ожидания готовности MQTT сервиса
-    mqtt_service = await try_initialize_mqtt(cfg, loop, retry_delay=30)
-    
     notifier = NotificationService(enabled=cfg.notifications)
     orchestrator = UpdateOrchestrator(cfg, notifier)
+    
+    # Начальная задержка для ожидания готовности MQTT сервиса
+    mqtt_service = await try_initialize_mqtt(cfg, orchestrator, loop, retry_delay=30)
     orchestrator.set_mqtt_service(mqtt_service)
 
     def setup_mqtt_handler(mqtt_svc):
@@ -166,7 +147,7 @@ async def main() -> None:
             retry_delay = min(30 + (mqtt_retry_count - 1) * 15, 120)  # Увеличиваем задержку: 30, 45, 60, 75, 90, 105, 120
             
             logger.info("MQTT не подключен. Попытка переподключения #%d через %d секунд", mqtt_retry_count, retry_delay)
-            mqtt_service = await try_initialize_mqtt(cfg, loop, retry_delay=retry_delay)
+            mqtt_service = await try_initialize_mqtt(cfg, orchestrator, loop, retry_delay=retry_delay)
             
             if setup_mqtt_handler(mqtt_service):
                 logger.info("MQTT успешно переподключен")
