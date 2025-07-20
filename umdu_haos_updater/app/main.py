@@ -32,8 +32,13 @@ def build_mqtt_params(cfg: AddonConfig):
                 port = sup.get("port") or port
                 user = user or sup.get("username")
                 password = password or sup.get("password")
+                logger.debug("Получены параметры MQTT из Supervisor API")
         except Exception as exc:
-            logger.warning("MQTT params via Supervisor API failed: %s", exc)
+            from .errors import NetworkError
+            if isinstance(exc, NetworkError) and "not ready yet" in str(exc):
+                logger.debug("MQTT сервис еще не готов, будем ждать")
+            else:
+                logger.warning("MQTT params via Supervisor API failed: %s", exc)
             # Если не удалось получить данные из Supervisor API, используем конфигурацию
             if not host or host == "core-mosquitto":
                 host = "core-mosquitto"  # Fallback к дефолтному хосту
@@ -65,8 +70,12 @@ def handle_install_cmd(orchestrator: UpdateOrchestrator):
     orchestrator.run_install(bundle_path, latest_version)
 
 
-async def try_initialize_mqtt(cfg: AddonConfig, loop: asyncio.AbstractEventLoop) -> MqttService | None:
+async def try_initialize_mqtt(cfg: AddonConfig, loop: asyncio.AbstractEventLoop, retry_delay: int = 0) -> MqttService | None:
     """Пытается инициализировать MQTT сервис."""
+    if retry_delay > 0:
+        logger.info("Ожидание %d секунд перед попыткой подключения к MQTT...", retry_delay)
+        await asyncio.sleep(retry_delay)
+    
     logger.info("Попытка инициализации MQTT...")
     host, port, user, passwd = await loop.run_in_executor(None, lambda: build_mqtt_params(cfg))
 
@@ -99,7 +108,9 @@ async def main() -> None:
         sys.exit(1)
 
     loop = asyncio.get_running_loop()
-    mqtt_service = await try_initialize_mqtt(cfg, loop)
+    
+    # Начальная задержка для ожидания готовности MQTT сервиса
+    mqtt_service = await try_initialize_mqtt(cfg, loop, retry_delay=30)
     
     notifier = NotificationService(enabled=cfg.notifications)
     orchestrator = UpdateOrchestrator(cfg, notifier)
@@ -115,17 +126,28 @@ async def main() -> None:
         await asyncio.sleep(2)
         mqtt_service.clear_retained_messages()
 
+    mqtt_retry_count = 0
+    max_mqtt_retries = 5
+    
     while True:
         await loop.run_in_executor(None, orchestrator.auto_cycle_once)
 
         if not mqtt_service:
-            logger.info("MQTT не подключен. Попытка переподключения...")
-            mqtt_service = await try_initialize_mqtt(cfg, loop)
+            mqtt_retry_count += 1
+            retry_delay = min(30 + (mqtt_retry_count - 1) * 15, 120)  # Увеличиваем задержку: 30, 45, 60, 75, 90, 105, 120
+            
+            logger.info("MQTT не подключен. Попытка переподключения #%d через %d секунд...", mqtt_retry_count, retry_delay)
+            mqtt_service = await try_initialize_mqtt(cfg, loop, retry_delay=retry_delay)
+            
             if setup_mqtt_handler(mqtt_service):
                 logger.info("MQTT успешно переподключен")
                 orchestrator.set_mqtt_service(mqtt_service)
+                mqtt_retry_count = 0  # Сбрасываем счетчик при успешном подключении
                 await asyncio.sleep(2)
                 mqtt_service.clear_retained_messages()
+            elif mqtt_retry_count >= max_mqtt_retries:
+                logger.warning("Достигнуто максимальное количество попыток подключения к MQTT (%d). Продолжаем работу без MQTT.", max_mqtt_retries)
+                mqtt_retry_count = 0  # Сбрасываем счетчик для следующего цикла
 
         await asyncio.sleep(cfg.check_interval)
 

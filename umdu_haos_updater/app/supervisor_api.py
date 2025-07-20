@@ -43,6 +43,13 @@ def get_mqtt_service() -> dict | None:
         response.raise_for_status()
         data = response.json()
         return data.get("data")
+    except requests.HTTPError as e:
+        if e.response.status_code == 400:
+            logger.debug("MQTT сервис еще не готов (400 Bad Request) - это нормально при старте системы")
+            raise NetworkError("MQTT service not ready yet") from e
+        else:
+            logger.error("HTTP ошибка получения информации о MQTT: %s", e)
+            raise NetworkError("Failed to get MQTT service info") from e
     except requests.RequestException as e:
         logger.error("Ошибка получения информации о MQTT: %s", e)
         raise NetworkError("Failed to get MQTT service info") from e
