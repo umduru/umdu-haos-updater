@@ -4,10 +4,22 @@ import json
 import logging
 import threading
 from typing import Callable, Optional
+import time
+from functools import wraps
 
 import paho.mqtt.client as mqtt
 
-logger = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__name__)
+
+
+def requires_discovery(func):
+    """Декоратор для методов, требующих включенного discovery."""
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if not self.discovery_enabled:
+            return
+        return func(self, *args, **kwargs)
+    return wrapper
 
 
 # MQTT Topics
@@ -36,7 +48,9 @@ class MqttService:
         self.discovery_enabled = discovery
         self.on_install_cmd = on_install_cmd
 
-        self._client = mqtt.Client()
+        self._client = mqtt.Client(client_id="umdu_haos_updater", clean_session=True)
+        self._client.reconnect_delay_set(min_delay=1, max_delay=30)
+        
         if username:
             self._client.username_pw_set(username, password or "")
 
@@ -46,131 +60,124 @@ class MqttService:
 
         self._lock = threading.Lock()
         self._connected = False
-
-        # Флаг активности update-entity. После успешной установки
-        # он переключается в False, чтобы при переподключении мы заново
-        # не публиковали discovery-топик и не «возрождали» кнопку обновления.
         self._update_entity_active: bool = True
+        self._initial_versions: tuple[str, str] | None = None
 
-    # ---------------------------------------------------------------------
-    # Connection Management
-    # ---------------------------------------------------------------------
     def start(self) -> None:
         """Запускает MQTT клиент."""
-        logger.info("MQTT: connecting to %s:%s", self.host, self.port)
+        _LOGGER.info("MQTT: connecting to %s:%s (user: %s)", self.host, self.port, self._client._username or "None")
         try:
+            self._client.enable_logger(_LOGGER)
             self._client.connect(self.host, self.port, 60)
+            self._client.loop_start()
+            _LOGGER.debug("MQTT: клиент запущен, ожидание подключения...")
         except Exception as exc:
-            logger.warning("MQTT: connection error: %s", exc)
-            return
-        self._client.loop_start()
+            _LOGGER.error("MQTT: connection error: %s", exc)
+            raise
 
     def _is_ready(self) -> bool:
         """Проверяет готовность к публикации."""
         return self.discovery_enabled and self._connected
 
-    # ---------------------------------------------------------------------
-    # State Management
-    # ---------------------------------------------------------------------
     def publish_update_state(self, installed: str, latest: str, in_progress: bool = False) -> None:
         """Публикует состояние обновления в едином формате."""
         if not self._is_ready():
             return
-        
         payload = {
             "installed_version": installed,
             "latest_version": latest,
             "in_progress": in_progress
         }
         
-        self._publish(STATE_TOPIC, json.dumps(payload))
+        self._publish(STATE_TOPIC, json.dumps(payload), retain=False)
 
     def publish_update_availability(self, online: bool) -> None:
         """Публикует доступность update entity."""
         if not self._is_ready():
             return
         self._publish(UPDATE_AVAIL_TOPIC, "online" if online else "offline")
+    
+    def set_initial_versions(self, installed: str, latest: str) -> None:
+        """Устанавливает начальные версии для публикации при подключении."""
+        self._initial_versions = (installed, latest)
+        _LOGGER.debug("MQTT: установлены начальные версии: installed=%s, latest=%s", installed, latest)
 
-    # ---------------------------------------------------------------------
-    # Entity Management
-    # ---------------------------------------------------------------------
+    @requires_discovery
     def clear_retained_messages(self) -> None:
-        """Очищает retain-сообщения для state топиков (НЕ discovery)."""
-        if not self.discovery_enabled:
-            return
-        
-        # Очищаем только state топики, НЕ discovery топики
-        # Discovery топики должны остаться для Home Assistant
-        topics = [STATE_TOPIC, UPDATE_AVAIL_TOPIC]
-        
-        for topic in topics:
-            logger.info("MQTT: очистка retain-сообщения для %s", topic)
+        """Очищает retain-сообщения для state топиков."""
+        for topic in [STATE_TOPIC, UPDATE_AVAIL_TOPIC]:
+            _LOGGER.info("MQTT: очистка retain-сообщения для %s", topic)
             self._client.publish(topic, "", retain=True)
 
+    @requires_discovery
     def deactivate_update_entity(self) -> None:
         """Деактивирует update entity."""
-        if not self.discovery_enabled:
-            return
-        # Публикуем пустое discovery-сообщение (retain), даже если сейчас
-        # нет соединения — paho-mqtt поставит сообщение в очередь и отправит
-        # его после автоматического reconnect. Таким образом update-entity
-        # гарантированно исчезнет после успешной установки.
-        self._publish(UPDATE_DISC_TOPIC, "")
+        _LOGGER.info("MQTT: деактивация update entity")
+        
+        # Устанавливаем availability в offline (entity остается в HA, но показывается как недоступный)
+        self._publish(UPDATE_AVAIL_TOPIC, "offline")
+        
         self._update_entity_active = False
+        _LOGGER.info("MQTT: update entity деактивирован")
 
-    # ---------------------------------------------------------------------
-    # MQTT Callbacks
-    # ---------------------------------------------------------------------
     def _on_connect(self, client, userdata, flags, rc):  # noqa: D401
         success = rc == 0
         with self._lock:
             self._connected = success
         
         if not success:
-            logger.warning("MQTT: failed to connect, code=%s", rc)
+            _LOGGER.warning("MQTT: failed to connect, code=%s", rc)
             return
         
-        logger.info("MQTT: connected")
-
-        # Подписка на команды
+        _LOGGER.info("MQTT: connected")
+        time.sleep(0.5)
         client.subscribe(COMMAND_TOPIC)
 
         if self.discovery_enabled:
             self._publish_discovery()
-            if self._update_entity_active:
-                self.publish_update_availability(True)
 
     def _on_disconnect(self, client, userdata, rc):  # noqa: D401
         with self._lock:
             self._connected = False
-        logger.warning("MQTT: disconnected code=%s", rc)
+        _LOGGER.warning("MQTT: disconnected code=%s", rc)
         
         if self.discovery_enabled and self._update_entity_active:
             try:
                 self.publish_update_availability(False)
             except Exception as e:
-                logger.debug("Не удалось отправить offline статус при отключении: %s", e)
+                _LOGGER.debug("Не удалось отправить offline статус при отключении: %s", e)
 
     def _on_message(self, client, userdata, msg):  # noqa: D401
         topic = msg.topic
         payload = msg.payload.decode("utf-8").strip()
-        logger.debug("MQTT: message %s %s", topic, payload)
+        _LOGGER.debug("MQTT: message %s %s", topic, payload)
 
         if topic == COMMAND_TOPIC:
-            if payload == "install" and self.on_install_cmd:
-                logger.info("MQTT: received install command")
-                self.on_install_cmd()
-            elif payload == "clear" and self._connected:
-                logger.info("MQTT: received clear command - очистка retain-сообщений")
-                self.clear_retained_messages()
-                self._publish_discovery()
+            self._handle_command(payload)
 
-    # ---------------------------------------------------------------------
-    # Discovery
-    # ---------------------------------------------------------------------
+    def _handle_command(self, payload: str):
+        """Обрабатывает команды, полученные через MQTT."""
+        commands = {
+            "install": self._handle_install,
+            "clear": self._handle_clear
+        }
+        handler = commands.get(payload)
+        if handler:
+            handler()
+
+    def _handle_install(self):
+        if self.on_install_cmd:
+            _LOGGER.info("MQTT: received install command")
+            self.on_install_cmd()
+
+    def _handle_clear(self):
+        if self._connected:
+            _LOGGER.info("MQTT: received clear command - очистка retain-сообщений")
+            self.clear_retained_messages()
+            self._publish_discovery()
+
     def _publish_discovery(self):
         """Публикует конфигурацию для Home Assistant discovery."""
-        # Update entity (публикуем, только если ещё активна)
         if self._update_entity_active:
             update_config = {
                 "name": "Home Assistant OS for UMDU K1",
@@ -183,11 +190,32 @@ class MqttService:
                 "platform": "update"
             }
             self._publish(UPDATE_DISC_TOPIC, json.dumps(update_config))
+            
+            # Публикуем availability
+            self.publish_update_availability(True)
+            
+            # Если есть начальные версии, сразу публикуем состояние
+            if self._initial_versions:
+                installed, latest = self._initial_versions
+                _LOGGER.info("MQTT: публикация начального состояния: installed=%s, latest=%s", installed, latest)
+                self.publish_update_state(installed, latest, False)
 
-    # ---------------------------------------------------------------------
-    # Internal Helpers
-    # ---------------------------------------------------------------------
-    def _publish(self, topic: str, payload: str):
-        """Внутренний метод для публикации с логированием."""
-        logger.debug("MQTT publish %s %s", topic, payload[:120])
-        self._client.publish(topic, payload, retain=True) 
+    def _publish(self, topic: str, payload: str, retain: bool = True):
+        """Внутренний метод для публикации сообщений."""
+        msg_type = "retained" if retain else "state"
+        _LOGGER.debug("MQTT publish (%s) %s %s", msg_type, topic, payload[:120])
+        if not self._connected:
+            _LOGGER.warning("MQTT: попытка публикации при отсутствии подключения")
+            return
+        
+        if not retain:
+            time.sleep(0.1)
+        
+        qos = 1 if not retain else 0
+        result = self._client.publish(topic, payload, retain=retain, qos=qos)
+        if result.rc != 0:
+            _LOGGER.warning("MQTT: ошибка публикации в %s: %s", topic, result.rc)
+        else:
+            _LOGGER.debug("MQTT: успешная публикация в %s", topic)
+            if not retain:
+                result.wait_for_publish(timeout=2.0)

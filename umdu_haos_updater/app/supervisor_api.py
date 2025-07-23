@@ -4,14 +4,14 @@ import os
 import logging
 import requests
 
-from .errors import SupervisorError, NetworkError
+from .errors import SupervisorError, NetworkError, handle_request_error
 
-logger = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__name__)
 
 SUPERVISOR_URL = "http://supervisor"
 TOKEN = os.getenv("SUPERVISOR_TOKEN")
 if not TOKEN:
-    logger.error(
+    _LOGGER.error(
         "SUPERVISOR_TOKEN не найден в переменных окружения — скрипт не сможет обращаться к API."
     )
 
@@ -19,31 +19,35 @@ def _headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {TOKEN}"}
 
 
-def get_current_haos_version() -> str:
-    """Возвращает установленную версию HAOS или бросает SupervisorError."""
+def _supervisor_request(endpoint: str, error_context: str) -> dict:
+    """Общая функция для выполнения запросов к Supervisor API."""
     try:
-        r = requests.get(f"{SUPERVISOR_URL}/os/info", headers=_headers(), timeout=5)
-        r.raise_for_status()
-        return r.json()["data"]["version"]
-    except requests.RequestException as exc:
-        raise NetworkError("/os/info network error") from exc
-    except Exception as exc:  # noqa: BLE001
-        raise SupervisorError("Invalid response from /os/info") from exc
+        url = f"{SUPERVISOR_URL}{endpoint}"
+        response = requests.get(url, headers=_headers(), timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.HTTPError as e:
+        if endpoint == "/services/mqtt" and e.response.status_code == 400:
+            _LOGGER.debug("MQTT сервис еще не готов (400 Bad Request) - это нормально при старте системы")
+            raise NetworkError("MQTT service not ready yet") from e
+        else:
+            handle_request_error(e, _LOGGER, "Supervisor API")
+            raise SupervisorError(f"Ошибка Supervisor API: {e}") from e
+    except requests.RequestException as e:
+        handle_request_error(e, _LOGGER, "Supervisor API")
+        raise SupervisorError(f"Ошибка Supervisor API: {e}") from e
+    except Exception as e:
+        _LOGGER.error("Неожиданная ошибка %s: %s", error_context, e)
+        raise SupervisorError(f"Unexpected error {error_context}") from e
 
 
-def get_mqtt_service() -> dict[str, str | None]:
-    """Возвращает словарь host/port/username/password или бросает SupervisorError."""
-    try:
-        r = requests.get(f"{SUPERVISOR_URL}/services/mqtt", headers=_headers(), timeout=5)
-        r.raise_for_status()
-        data = r.json().get("data", {})
-        return {
-            "host": data.get("host"),
-            "port": data.get("port"),
-            "username": data.get("username"),
-            "password": data.get("password"),
-        }
-    except requests.RequestException as exc:
-        raise NetworkError("/services/mqtt network error") from exc
-    except Exception as exc:  # noqa: BLE001
-        raise SupervisorError("Invalid response from /services/mqtt") from exc 
+def get_current_haos_version() -> str | None:
+    """Получает текущую версию HAOS через Supervisor API."""
+    data = _supervisor_request("/os/info", "получения версии HAOS")
+    return data.get("data", {}).get("version")
+
+
+def get_mqtt_service() -> dict | None:
+    """Получает информацию о MQTT сервисе через Supervisor API."""
+    data = _supervisor_request("/services/mqtt", "получения информации о MQTT")
+    return data.get("data")

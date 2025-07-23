@@ -1,6 +1,6 @@
 name: "UMDU Home Assistant OS Updater"
-description: "Add-on для обновления форка HAOS для UMDU K1"
-version: "0.7.11"
+description: "Add-on для обновления форка HAOS для umdu k1"
+version: "0.8.27"
 slug: "umdu_haos_updater"
 init: false
 arch:
@@ -12,27 +12,25 @@ hassio_api: true
 hassio_role: admin
 homeassistant_api: true
 options:
-  update_check_interval: 3600
   auto_update: false
   notifications: true
-  mqtt_discovery: true
+  debug: false
+  # MQTT настройки
   mqtt_host: "core-mosquitto"
   mqtt_port: 1883
   mqtt_user: ""
   mqtt_password: ""
-  debug: false
 schema:
-  update_check_interval: int(300,86400)
   auto_update: bool
   notifications: bool
-  mqtt_discovery: bool
+  debug: bool
+  # MQTT параметры
   mqtt_host: str?
   mqtt_port: port?
   mqtt_user: str?
   mqtt_password: str?
-  debug: bool
 map:
   - type: share
     read_only: false
 services:
-  - "mqtt:need" 
+  - "mqtt:need"
