@@ -13,6 +13,7 @@ from .errors import DownloadError, NetworkError, handle_request_error
 _LOGGER = logging.getLogger(__name__)
 
 GITHUB_VERSIONS_URL = "https://raw.githubusercontent.com/umduru/umdu-haos-updater/main/versions.json"
+GITHUB_VERSIONS_DEV_URL = "https://raw.githubusercontent.com/umduru/umdu-haos-updater/main/versions_dev.json"
 RELEASE_BASE_TEMPLATE = "https://github.com/umduru/umdu-haos-updater/releases/download/{ver}"
 SHARE_DIR = Path("/share/umdu-haos-updater")
 
@@ -39,10 +40,13 @@ class UpdateInfo:
 
 
 
-def fetch_available_update() -> UpdateInfo:
+def fetch_available_update(dev_channel: bool = False) -> UpdateInfo:
     """Запрашивает доступные версии с GitHub."""
+    url = GITHUB_VERSIONS_DEV_URL if dev_channel else GITHUB_VERSIONS_URL
+    channel_name = "dev" if dev_channel else "stable"
+    _LOGGER.debug("Запрос версий из %s канала: %s", channel_name, url)
     try:
-        r = requests.get(GITHUB_VERSIONS_URL, timeout=5)
+        r = requests.get(url, timeout=5)
         r.raise_for_status()
         data = r.json()["hassos"]["umdu-k1"]
         if isinstance(data, dict):
@@ -120,14 +124,14 @@ def _verify_sha256(path: Path, expected: str) -> bool:
     return sha.hexdigest().lower() == expected.lower()
 
 
-def check_for_update_and_download(auto_download: bool = False, orchestrator=None) -> Path | None:
+def check_for_update_and_download(auto_download: bool = False, orchestrator=None, dev_channel: bool = False) -> Path | None:
     current = get_current_haos_version()
     if not current:
         _LOGGER.warning("Не удалось определить установленную версию")
         return None
 
     try:
-        avail = fetch_available_update()
+        avail = fetch_available_update(dev_channel=dev_channel)
     except NetworkError:
         _LOGGER.info("Не удалось получить информацию об обновлении")
         return None

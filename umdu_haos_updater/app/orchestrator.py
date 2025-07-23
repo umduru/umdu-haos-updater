@@ -42,7 +42,7 @@ class UpdateOrchestrator:
             self._latest_version = latest
         elif self._latest_version is None:
             try:
-                self._latest_version = fetch_available_update().version
+                self._latest_version = fetch_available_update(dev_channel=self._cfg.dev_channel).version
             except Exception:
                 self._latest_version = installed
         
@@ -77,7 +77,7 @@ class UpdateOrchestrator:
 
     def check_and_download(self) -> Path | None:
         """Проверяет и загружает обновление согласно конфигурации."""
-        return check_for_update_and_download(auto_download=self._cfg.auto_update, orchestrator=self)
+        return check_for_update_and_download(auto_download=self._cfg.auto_update, orchestrator=self, dev_channel=self._cfg.dev_channel)
 
     def install_if_ready(self, bundle_path: Path) -> bool:
         """Устанавливает RAUC bundle."""
