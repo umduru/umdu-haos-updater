@@ -25,7 +25,7 @@ def handle_install_cmd(orchestrator: UpdateOrchestrator):
     _, latest_version = orchestrator.get_versions()
     _LOGGER.info("MQTT install: установка версии %s", latest_version)
 
-    bundle_path = check_for_update_and_download(auto_download=True, orchestrator=orchestrator)
+    bundle_path = check_for_update_and_download(auto_download=True, orchestrator=orchestrator, dev_channel=orchestrator._cfg.dev_channel)
     if not bundle_path:
         _LOGGER.error("Не удалось получить RAUC-бандл, установка отменена")
         orchestrator.publish_state(latest=latest_version)
@@ -96,7 +96,7 @@ async def main() -> None:
     if cfg.debug:
         logging.getLogger().setLevel(logging.DEBUG)
         _LOGGER.debug("DEBUG mode включён")
-    _LOGGER.info("Настройки: interval=%s auto_update=%s", cfg.check_interval, cfg.auto_update)
+    _LOGGER.info("Настройки: interval=%s auto_update=%s dev_channel=%s", cfg.check_interval, cfg.auto_update, cfg.dev_channel)
 
     if not TOKEN:
         _LOGGER.error("SUPERVISOR_TOKEN отсутствует — работа невозможна")

@@ -23,6 +23,7 @@ class AddonConfig:
         self.auto_update = options.get("auto_update", False)
         self.notifications = options.get("notifications", True)
         self.debug = options.get("debug", False)
+        self.dev_channel = options.get("dev_channel", False)
 
         mqtt_config = options.get("mqtt", {})
         self.mqtt_host = mqtt_config.get("host", "core-mosquitto")
