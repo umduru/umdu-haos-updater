@@ -1,0 +1,44 @@
+docs/
+.vercel/
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Add-on specific
+data/
+downloads/
+*.raucb
+*.img
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+
+# Development artifacts
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.*
+*.coverage
+*.cov
+*.cover
+
+
+# Logs & debug
+debug/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
