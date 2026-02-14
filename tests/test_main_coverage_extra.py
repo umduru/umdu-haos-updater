@@ -226,6 +226,7 @@ def test_main_reconnect_sets_service_and_wait_for_timeout(monkeypatch):
 
     # Make wait_for timeout immediately to cover the except TimeoutError branch
     def instant_timeout(awaitable, timeout=None):
+        awaitable.close()
         raise asyncio.TimeoutError()
     monkeypatch.setattr(m.asyncio, "wait_for", instant_timeout)
 

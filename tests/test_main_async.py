@@ -220,12 +220,14 @@ def test_main_dunder_block(monkeypatch):
     import runpy, asyncio as aio
     # make asyncio.run raise to abort quickly
     def abort(coro):
+        coro.close()
         raise SystemExit(0)
     monkeypatch.setattr(aio, "run", abort)
     with pytest.raises(SystemExit):
         runpy.run_module("app.main", run_name="__main__")
     # and KeyboardInterrupt path
     def kbi(coro):
+        coro.close()
         raise KeyboardInterrupt()
     monkeypatch.setattr(aio, "run", kbi)
     # Should not raise

@@ -52,6 +52,16 @@ def test_fetch_available_update_variants(monkeypatch):
     assert info.version == "16.1.0" and info.sha256 == "abc"
 
 
+
+
+def test_fetch_available_update_invalid_payload_raises_network(monkeypatch):
+    def fake_get(url, timeout=None):
+        return FakeResp({"hassos": {"umdu-k1": {"sha256": "abc"}}})
+
+    monkeypatch.setattr(upd, "requests", types.SimpleNamespace(get=fake_get))
+    with pytest.raises(NetworkError):
+        upd.fetch_available_update()
+
 def test_fetch_available_update_error_raises_network(monkeypatch):
     def fake_get(url, timeout=None):
         raise RuntimeError("boom")

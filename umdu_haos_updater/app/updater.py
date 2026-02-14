@@ -49,9 +49,18 @@ def fetch_available_update(dev_channel: bool = False) -> UpdateInfo:
         r = requests.get(url, timeout=5)
         r.raise_for_status()
         data = r.json()["hassos"]["umdu-k1"]
+
         if isinstance(data, dict):
-            return UpdateInfo(version=str(data.get("version")), sha256=data.get("sha256"))
-        return UpdateInfo(version=str(data))
+            version = data.get("version")
+            sha256 = data.get("sha256")
+        else:
+            version = data
+            sha256 = None
+
+        if not version or not isinstance(version, str):
+            raise ValueError("Invalid or missing version field in versions.json")
+
+        return UpdateInfo(version=version, sha256=sha256)
     except Exception as e:
         handle_request_error(e, "получить versions.json", _LOGGER)
 
