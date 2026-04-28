@@ -29,3 +29,47 @@
 - debug: Подробные логи для диагностики (false).
 - dev_channel: Получать версии из канала предварительных сборок (false).
 - mqtt_host / mqtt_port / mqtt_user / mqtt_password: Параметры MQTT. Обычно можно оставить пустыми — будут использованы настройки сервиса MQTT из Supervisor. Указывайте значения, только если используете внешний брокер.
+
+## Сборка и проверка
+
+Дополнение собирается из каталога `umdu_haos_updater`. Dockerfile не требует `BUILD_FROM`: базовый образ задан явно как официальный multi-arch образ Home Assistant `ghcr.io/home-assistant/base:3.23`, который поддерживает `linux/arm64`.
+
+Локальная проверка сборки, близкая к команде Supervisor:
+
+```bash
+cd umdu_haos_updater
+docker buildx build . \
+  --file Dockerfile \
+  --platform linux/arm64 \
+  --pull \
+  --build-arg BUILD_VERSION=1.0.0 \
+  --build-arg BUILD_ARCH=aarch64 \
+  --tag local/aarch64-addon-umdu_haos_updater:1.0.0 \
+  --load
+```
+
+Если локальный Docker не может загрузить cross-platform образ через `--load`, проверьте хотя бы синтаксис и удаленную сборку без загрузки:
+
+```bash
+cd umdu_haos_updater
+docker buildx imagetools inspect ghcr.io/home-assistant/base:3.23
+docker buildx build . \
+  --file Dockerfile \
+  --platform linux/arm64 \
+  --pull \
+  --build-arg BUILD_VERSION=1.0.0 \
+  --build-arg BUILD_ARCH=aarch64 \
+  --tag local/aarch64-addon-umdu_haos_updater:1.0.0
+```
+
+Для проверки в Home Assistant добавьте репозиторий, откройте карточку дополнения в Supervisor / Apps, нажмите Install и проверьте лог сборки Supervisor. В команде сборки не должен появляться `--build-arg BUILD_FROM`, и ошибка `base name ($BUILD_FROM) should not be blank` не должна возникать.
+
+## Права и безопасность
+
+- `arch: [aarch64]` — целевая архитектура устройства umdu k1.
+- `ingress` не включен: у дополнения нет веб-интерфейса и оно не слушает HTTP-порт.
+- `hassio_api: true` и `hassio_role: admin` нужны для совместимого доступа к Supervisor API: чтения версии HAOS через `/os/info` и получения параметров MQTT-сервиса.
+- `homeassistant_api: true` нужен для уведомлений в Home Assistant через внутренний API-прокси Supervisor.
+- `host_dbus: true` нужен для запуска `rauc install` через host D-Bus.
+- Не используются `privileged`, `full_access`, `host_network`, `docker_api`, доступ к `/dev`, `/boot`, `/sys` или `/proc`.
+- Обновления скачиваются только по HTTPS. Если в manifest версии указан `sha256`, файл RAUC bundle проверяется до установки; сам RAUC дополнительно проверяет подпись bundle при установке.

@@ -1,14 +1,23 @@
-ARG BUILD_FROM
-FROM $BUILD_FROM
+FROM ghcr.io/home-assistant/base:3.23
+
+ARG BUILD_VERSION="0.0.0"
+ARG BUILD_ARCH="aarch64"
+
+LABEL \
+  io.hass.version="${BUILD_VERSION}" \
+  io.hass.type="app" \
+  io.hass.arch="${BUILD_ARCH}" \
+  io.hass.name="UMDU Home Assistant OS Updater" \
+  io.hass.description="Home Assistant OS updater for umdu k1" \
+  io.hass.url="https://github.com/umduru/umdu-haos-updater" \
+  org.opencontainers.image.title="UMDU Home Assistant OS Updater" \
+  org.opencontainers.image.description="Home Assistant OS updater for umdu k1" \
+  org.opencontainers.image.source="https://github.com/umduru/umdu-haos-updater"
 
 # Установка необходимых пакетов для работы с системой и обновлениями
 # Примечание: пакет rauc отсутствует в стабильных репозиториях Alpine, поэтому
 # устанавливаем его из edge/testing. Остальные пакеты — из стабильного репо базового образа.
 RUN apk add --no-cache \
-    bash \
-    curl \
-    wget \
-    jq \
     ca-certificates \
     dbus \
     python3 \
