@@ -23,7 +23,7 @@ RUN apk add --no-cache \
     python3 \
     py3-pip && \
   apk add --no-cache \
-    --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing \
+    --repository=https://mirror.yandex.ru/mirrors/alpine/edge/testing \
     rauc
 
 # Создание рабочей директории
