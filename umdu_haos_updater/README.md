@@ -28,9 +28,9 @@ docker buildx build . \
   --file Dockerfile \
   --platform linux/arm64 \
   --pull \
-  --build-arg BUILD_VERSION=1.0.0 \
+  --build-arg BUILD_VERSION=1.0.2 \
   --build-arg BUILD_ARCH=aarch64 \
-  --tag local/aarch64-addon-umdu_haos_updater:1.0.0 \
+  --tag local/aarch64-addon-umdu_haos_updater:1.0.2 \
   --load
 ```
 
