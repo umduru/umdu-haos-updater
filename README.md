@@ -30,9 +30,11 @@
 - dev_channel: Получать версии из канала предварительных сборок (false).
 - mqtt_host / mqtt_port / mqtt_user / mqtt_password: Параметры MQTT. Обычно можно оставить пустыми — будут использованы настройки сервиса MQTT из Supervisor. Указывайте значения, только если используете внешний брокер.
 
-## Сборка и проверка
+## Образ и проверка
 
-Дополнение собирается из каталога `umdu_haos_updater`. Dockerfile не требует `BUILD_FROM`: базовый образ задан явно как официальный multi-arch образ Home Assistant `ghcr.io/home-assistant/base:3.23`, который поддерживает `linux/arm64`.
+Дополнение использует готовый образ `ghcr.io/umduru/umdu-haos-updater:1.0.2`, который публикуется GitHub Actions. Благодаря полю `image` в `config.yaml` Home Assistant Supervisor скачивает готовый образ из GHCR вместо локальной сборки на устройстве.
+
+Dockerfile остается в репозитории для CI и локальной диагностики. Он не требует `BUILD_FROM`: базовый образ задан явно как официальный multi-arch образ Home Assistant `ghcr.io/home-assistant/base:3.23`, который поддерживает `linux/arm64`.
 
 Локальная проверка сборки, близкая к команде Supervisor:
 
@@ -62,7 +64,7 @@ docker buildx build . \
   --tag local/aarch64-addon-umdu_haos_updater:1.0.2
 ```
 
-Для проверки в Home Assistant добавьте репозиторий, откройте карточку дополнения в Supervisor / Apps, нажмите Install и проверьте лог сборки Supervisor. В команде сборки не должен появляться `--build-arg BUILD_FROM`, и ошибка `base name ($BUILD_FROM) should not be blank` не должна возникать.
+Для проверки в Home Assistant добавьте репозиторий, откройте карточку дополнения в Supervisor / Apps, нажмите Install и проверьте лог Supervisor. Вместо `docker buildx build` на устройстве должен скачиваться образ `ghcr.io/umduru/umdu-haos-updater:1.0.2`.
 
 ## Права и безопасность
 

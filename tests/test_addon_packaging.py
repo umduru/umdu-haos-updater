@@ -41,6 +41,10 @@ def test_addon_config_supports_aarch64_without_ingress_or_extra_privileges():
 
     assert re.search(r"(?m)^slug:\s+[\"']?umdu_haos_updater[\"']?\s*$", config)
     assert re.search(r"(?m)^version:\s+[\"']?1\.0\.2[\"']?\s*$", config)
+    assert re.search(
+        r"(?m)^image:\s+[\"']?ghcr\.io/umduru/umdu-haos-updater[\"']?\s*$",
+        config,
+    )
     assert re.search(r"(?m)^\s*-\s+aarch64\s*$", config)
     assert re.search(r"(?m)^hassio_role:\s+admin\s*$", config)
     assert "ingress: true" not in config

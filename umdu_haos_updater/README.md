@@ -17,9 +17,11 @@
 - dev_channel — получение версий из канала предварительных сборок (false)
 - mqtt_host / mqtt_port / mqtt_user / mqtt_password — параметры MQTT. Обычно их можно не заполнять: будут использованы настройки MQTT из Supervisor. Заполняйте только при использовании внешнего брокера.
 
-### Сборка
+### Образ и сборка
 
-Dockerfile использует официальный multi-arch base image Home Assistant `ghcr.io/home-assistant/base:3.23` напрямую. `BUILD_FROM` не нужен и не передается Supervisor начиная с актуального BuildKit-based процесса сборки.
+Дополнение использует готовый образ `ghcr.io/umduru/umdu-haos-updater:1.0.2`, который публикуется GitHub Actions. Home Assistant Supervisor скачивает этот образ из GHCR и не запускает локальную сборку на устройстве.
+
+Dockerfile используется для CI и локальной диагностики. Он использует официальный multi-arch base image Home Assistant `ghcr.io/home-assistant/base:3.23` напрямую. `BUILD_FROM` не нужен и не передается Supervisor начиная с актуального BuildKit-based процесса сборки.
 
 Локальная проверка:
 
